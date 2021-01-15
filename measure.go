@@ -1,7 +1,7 @@
 package mp3len
 
 import (
-	"fmt"
+	"encoding/binary"
 	"io"
 	"time"
 
@@ -19,15 +19,17 @@ func EstimateDuration(r io.Reader, totalSize int64) (duration time.Duration, err
 		return 0, err
 	}
 
-	// read MP3 frame header; first 11 bytes should be all 1
-	mp3HeaderBytes := make([]byte, 4)
-	_, err = r.Read(mp3HeaderBytes)
+	var headerBits uint32
 
-	if err != nil {
-		return 0, fmt.Errorf("unable to read after id3tags")
+	if err = binary.Read(r, binary.BigEndian, &headerBits); err != nil {
+		return
 	}
 
-	mp3Header, _ := mpeg.ParseMP3Header(mp3HeaderBytes)
+	var mp3Header mpeg.MP3Header
+
+	if mp3Header, err = mpeg.ParseMP3Header(headerBits); err != nil {
+		return
+	}
 
 	duration = time.Duration((totalSize - int64(id3Size)) / (int64(mp3Header.BitRate) / 8) * 1000000)
 

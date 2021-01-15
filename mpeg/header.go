@@ -1,7 +1,8 @@
 package mpeg
 
+// For MPEG header format, see: http://www.mp3-tech.org/programmer/frame_header.html
+
 import (
-	"encoding/binary"
 	"fmt"
 )
 
@@ -125,15 +126,14 @@ func getSampleFreq(version AudioVersionValue, sampleRateIndex int) (int, error) 
 	return sampleRateLookup[sampleRateIndex], nil
 }
 
-func ParseMP3Header(bytes []byte) (header MP3Header, err error) {
+// ParseMP3Header parses MP3 header by reading a 4-byte data.
+func ParseMP3Header(headerBits uint32) (header MP3Header, err error) {
 	header = MP3Header{
 		AudioVersion: 0xF,
 		Layer:        0xF,
 		BitRate:      -1,
 		SampleFreq:   -1,
 	}
-
-	headerBits := binary.BigEndian.Uint32(bytes)
 
 	if headerBits&mpegFlagFrameSync == 0 {
 		err = fmt.Errorf("MP3 frame sync not found (expecting %X, but found %X)", mpegFlagFrameSync, headerBits)
