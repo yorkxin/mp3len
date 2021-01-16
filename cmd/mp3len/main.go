@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 
@@ -12,7 +13,7 @@ import (
 
 var errInvalidInput = fmt.Errorf("First argument must be a path or HTTP URL")
 
-func openFile(location *url.URL) (io.Reader, int64, error) {
+func openFile(location *url.URL) (io.ReadCloser, int64, error) {
 	f, err := os.Open(location.Path)
 
 	if err != nil {
@@ -30,6 +31,21 @@ func openFile(location *url.URL) (io.Reader, int64, error) {
 	return f, length, nil
 }
 
+func openHTTP(location *url.URL) (io.ReadCloser, int64, error) {
+	req, err := http.NewRequest("GET", location.String(), nil)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return resp.Body, resp.ContentLength, nil
+}
+
 func main() {
 	flag.Parse()
 
@@ -40,11 +56,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	var r io.Reader
+	var r io.ReadCloser
 	var totalLength int64
 
 	if input.Scheme == "http" || input.Scheme == "https" {
-		// TODO: open http
+		r, totalLength, err = openHTTP(input)
 	} else if input.Scheme == "file" || input.Scheme == "" {
 		r, totalLength, err = openFile(input)
 	} else {
@@ -56,6 +72,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+
+	defer r.Close()
 
 	duration, err := mp3len.EstimateDuration(r, totalLength)
 
