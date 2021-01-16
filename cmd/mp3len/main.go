@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/yorkxin/mp3len"
 )
@@ -38,13 +40,39 @@ func openHTTP(location *url.URL) (io.ReadCloser, int64, error) {
 		return nil, 0, err
 	}
 
+	// avoid reading the whole response from server
+	// NOTE: this depends on server implementation of Range request.
+	// TODO: find a better way to stream, rather than guessing length.
+	req.Header.Set("Range", "bytes=0-65600")
+
 	resp, err := http.DefaultClient.Do(req)
 
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return resp.Body, resp.ContentLength, nil
+	length := resp.ContentLength
+
+	if cr := resp.Header.Get("Content-Range"); cr != "" {
+		// TODO: handle unit != "bytes"
+		// TODO: handle unknown size
+		splitted := strings.SplitN(cr, "/", 2)
+
+		if len(splitted) == 2 {
+			totalBytes, err := strconv.Atoi(splitted[1])
+			if err == nil {
+				length = int64(totalBytes)
+			}
+			if err != nil {
+				// edge case: Content-Range is "*" or something unparsable
+			}
+		} else {
+			// edge case: Content-Range is not in standard "unit start-end/total" foramt.
+			// fallback to non-range request
+		}
+	}
+
+	return resp.Body, length, nil
 }
 
 func main() {
