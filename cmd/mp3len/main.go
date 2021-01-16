@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io"
@@ -47,6 +48,7 @@ func openHTTP(location *url.URL) (io.ReadCloser, int64, error) {
 }
 
 func main() {
+	pause := flag.Bool("pause", false, "press any key to exit; useful for checking IO activity.")
 	flag.Parse()
 
 	input, err := url.Parse(flag.Arg(0))
@@ -83,4 +85,11 @@ func main() {
 	}
 
 	fmt.Printf("%s\n", duration)
+
+	if *pause == true {
+		anyKeyReader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Press enter key to exit...")
+		buf := make([]byte, 1)
+		anyKeyReader.Read(buf)
+	}
 }
