@@ -3,32 +3,61 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
+	"net/url"
 	"os"
 
 	"github.com/yorkxin/mp3len"
 )
 
+var errInvalidInput = fmt.Errorf("First argument must be a path or HTTP URL")
+
+func openFile(location *url.URL) (io.Reader, int64, error) {
+	f, err := os.Open(location.Path)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	stat, err := f.Stat()
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	length := stat.Size()
+
+	return f, length, nil
+}
+
 func main() {
 	flag.Parse()
 
-	input := flag.Arg(0)
+	input, err := url.Parse(flag.Arg(0))
 
-	// TODO: support http[s]:// or s3:// using interfaces
-	if input == "" {
-		fmt.Fprintln(os.Stderr, "first argument must be a filename")
+	if input.Path == "" || err != nil {
+		fmt.Fprintln(os.Stderr, errInvalidInput)
 		os.Exit(1)
 	}
 
-	f, err := os.Open(input)
+	var r io.Reader
+	var totalLength int64
+
+	if input.Scheme == "http" || input.Scheme == "https" {
+		// TODO: open http
+	} else if input.Scheme == "file" || input.Scheme == "" {
+		r, totalLength, err = openFile(input)
+	} else {
+		fmt.Fprintln(os.Stderr, errInvalidInput)
+		os.Exit(1)
+	}
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Could not open file in read mode")
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	// TODO: handle error
-	stat, _ := f.Stat()
-	duration, err := mp3len.EstimateDuration(f, stat.Size())
+	duration, err := mp3len.EstimateDuration(r, totalLength)
 
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
