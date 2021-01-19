@@ -27,7 +27,7 @@ func (frame *ID3Frame) String() string {
 		content = string(frame.Data)
 	}
 
-	return fmt.Sprintf("%04X %s %-4d %016b %s", frame.Offset, frame.ID, frame.Size, frame.Flags, content)
+	return fmt.Sprintf("[%04X] %s %-5d %016b %s", frame.Offset, frame.ID, frame.Size, frame.Flags, content)
 }
 
 // calculateID3TagSize returns an integer from 4-byte (32-bit) input.

@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"time"
 
 	"github.com/yorkxin/mp3len"
 )
@@ -48,7 +47,7 @@ func openHTTP(location *url.URL) (io.ReadCloser, int64, error) {
 	return resp.Body, resp.ContentLength, nil
 }
 
-func processInput(location *url.URL) (time.Duration, error) {
+func processInput(location *url.URL) (*mp3len.Metadata, error) {
 	var r io.ReadCloser
 	var totalLength int64
 	var err error
@@ -58,20 +57,22 @@ func processInput(location *url.URL) (time.Duration, error) {
 	} else if location.Scheme == "file" || location.Scheme == "" {
 		r, totalLength, err = openFile(location)
 	} else {
-		return 0, errInvalidInput
+		return nil, errInvalidInput
 	}
 
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	defer r.Close()
 
-	return mp3len.EstimateDuration(r, totalLength)
+	return mp3len.GetInfo(r, totalLength)
 }
 
 func main() {
 	pause := flag.Bool("pause", false, "press any key to exit; useful for checking IO activity.")
+	verbose := flag.Bool("verbose", false, "show verbose info such as id3 tags and mp3 format")
+
 	flag.Parse()
 
 	location, err := url.Parse(flag.Arg(0))
@@ -81,14 +82,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	duration, err := processInput(location)
+	info, err := processInput(location)
 
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	fmt.Println(duration.String())
+	fmt.Println(info.String(*verbose))
 
 	if *pause == true {
 		anyKeyReader := bufio.NewReader(os.Stdin)
