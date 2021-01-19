@@ -71,7 +71,11 @@ func readNextFrame(r io.Reader) (frame *ID3Frame, totalRead int, err error) {
 	size := binary.BigEndian.Uint32(header[4:8])
 	flags := binary.BigEndian.Uint16(header[8:10])
 	data := make([]byte, size)
-	n, _ = r.Read(data)
+	// In case of HTTP response body, r is a bufio.Reader, and in some cases
+	// r.Read() may not fill the whole len(data). Using io.ReadFull ensures it
+	// fills the whole len(data) slice.
+	// FIXME: handle err
+	n, _ = io.ReadFull(r, data)
 	totalRead += n
 
 	frame = &ID3Frame{
