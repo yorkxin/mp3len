@@ -23,17 +23,17 @@ const (
 )
 
 const (
-	Version2_5     = iota
-	VersionInvalid = iota
-	Version2       = iota
-	Version1       = iota
+	Version2_5     = 0b00
+	VersionInvalid = 0b01
+	Version2       = 0b10
+	Version1       = 0b11
 )
 
 const (
-	LayerInvalid = iota
-	Layer3       = iota
-	Layer2       = iota
-	Layer1       = iota
+	LayerInvalid = 0b00
+	Layer3       = 0b01
+	Layer2       = 0b10
+	Layer1       = 0b11
 )
 
 const (
