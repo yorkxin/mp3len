@@ -1,13 +1,21 @@
 package id3
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
+	"io/ioutil"
+
+	"golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/transform"
 )
 
 const id3v2Flag = "ID3" // first 3 bytes of an MP3 file with ID3v2 tag
 const lenOfHeader = 10  // fixed length defined by ID3v2 spec
+
+const textEncodingLatin1 = 0x00
+const textEncodingUTF16 = 0x01
 
 type ID3Frame struct {
 	ID     string // 4-char
@@ -19,16 +27,62 @@ type ID3Frame struct {
 
 func (frame *ID3Frame) String() string {
 	var content string
-	// TODO: detect printable instead of guessing by len()
 
-	if frame.Size > 100 {
-		content = fmt.Sprintf("%x[...]", frame.Data[0:100])
+	if frame.hasText() {
+		var err error
+		content, err = decodeString(frame.Data)
+
+		if err != nil {
+			content = binaryView(frame.Data, 100)
+		}
 	} else {
-		// FIXME: decode UTF-16
-		content = string(frame.Data)
+		content = binaryView(frame.Data, 100)
 	}
 
 	return fmt.Sprintf("[%04X] %s %-5d %016b %s", frame.Offset, frame.ID, frame.Size, frame.Flags, content)
+}
+
+func (frame *ID3Frame) hasText() bool {
+	return frame.ID[0] == 'T' || frame.ID[0] == 'W'
+}
+
+// TextContent returns a string (UTF-8) decoded from frame data, if the data is
+// a text frame or URL frame. For other kinds of frames, an empty string will
+// be returned, and the secondary return value will be bool(false).
+//
+// FIXME: support TXXX and WXXX which has 3 sections, encoding flag, description
+// and text, sepearted by 0x00{1,2}
+func decodeString(data []byte) (string, error) {
+	// First byte is encoding flag
+	if data[0] == textEncodingLatin1 {
+		return string(data[1:]), nil
+	} else if data[0] == textEncodingUTF16 {
+		return decodeUTF16String(data[1:])
+	} else {
+		// Undefined text encoding
+		return "", fmt.Errorf("Unable to decode string")
+	}
+}
+
+func decodeUTF16String(buf []byte) (string, error) {
+	utf16Encoding := unicode.UTF16(unicode.LittleEndian, unicode.ExpectBOM).NewDecoder()
+	utf16Reader := transform.NewReader(bytes.NewReader(buf), utf16Encoding)
+	utf8, err := ioutil.ReadAll(utf16Reader)
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(utf8), nil
+}
+
+func binaryView(buf []byte, max int) string {
+	// Fallback to binary view
+	if len(buf) > max {
+		return fmt.Sprintf("%x[...]", buf[:max])
+	}
+
+	return fmt.Sprintf("%x", buf)
 }
 
 // calculateID3TagSize returns an integer from 4-byte (32-bit) input.
