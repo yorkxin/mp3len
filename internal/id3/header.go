@@ -12,17 +12,10 @@ type Header struct {
 	Version  int
 	Revision int
 	Flags    uint8
-	size     int
-}
 
-// Size returns total bytes of the ID3 tags, excluding header.
-func (h *Header) Size() int {
-	return h.size
-}
-
-// TagSize returns total bytes of the ID3 tags, including header.
-func (h *Header) TagSize() int {
-	return h.size + lenOfHeader
+	// Parsed from header payload by calculateID3TagSize.
+	// The size does not include header itself (always 10 bytes)
+	size int
 }
 
 // calculateID3TagSize returns an integer from 4-byte (32-bit) input.

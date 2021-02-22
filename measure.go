@@ -13,14 +13,13 @@ import (
 
 // Metadata holds the parsed metadata of an MP3 input
 type Metadata struct {
-	duration  time.Duration         // Estimated duration of the MP3
-	mp3Header mp3header.MP3Header   // MP3 Audio Frame Header (first frame only)
-	id3Frames []id3.FrameWithOffset // ID3 frames
-	id3Size   int                   // total length of id3 frames
+	duration  time.Duration       // Estimated duration of the MP3
+	id3Tag    *id3.Tag            // ID3 Tag block
+	mp3Header mp3header.MP3Header // MP3 Audio Frame Header (first frame only)
 }
 
 func (metadata *Metadata) calculateDuration(totalSize int64) {
-	metadata.duration = time.Duration((totalSize - int64(metadata.id3Size)) / (int64(metadata.mp3Header.BitRate) / 8) * 1000000)
+	metadata.duration = time.Duration((totalSize - int64(metadata.id3Tag.TotalSize())) / (int64(metadata.mp3Header.BitRate) / 8) * 1000000)
 
 	if metadata.mp3Header.ChannelMode == mp3header.ChannelModeMono {
 		metadata.duration *= 2
@@ -39,8 +38,8 @@ func (metadata *Metadata) String(verbose bool) string {
 	sb.WriteString(metadata.mp3Header.String())
 	sb.WriteByte('\n')
 
-	sb.WriteString(fmt.Sprintf("ID3 Frames: (size: %d)\n", metadata.id3Size))
-	for _, frame := range metadata.id3Frames {
+	sb.WriteString(fmt.Sprintf("ID3 Frames: (size: %d, padding: %d)\n", metadata.id3Tag.Size(), metadata.id3Tag.PaddingSize))
+	for _, frame := range metadata.id3Tag.Frames {
 		sb.WriteString(frame.String())
 		sb.WriteByte('\n')
 	}
@@ -57,7 +56,7 @@ func GetInfo(r io.Reader, totalSize int64) (*Metadata, error) {
 	var err error
 
 	// Algorithm from https://www.factorialcomplexity.com/blog/how-to-get-a-duration-of-a-remote-mp3-file
-	metadata.id3Size, metadata.id3Frames, err = id3.ReadFrames(r)
+	metadata.id3Tag, _, err = id3.Parse(r)
 
 	if err != nil {
 		return &metadata, err

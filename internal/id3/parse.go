@@ -3,24 +3,54 @@ package id3
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 )
+
+// Tag is the whole ID3 Tag block, including a Header and many FrameWithOffset.
+type Tag struct {
+	Header      Header
+	Frames      []FrameWithOffset
+	PaddingSize int
+}
+
+// Size returns total bytes of the ID3 tag, excluding header, including padding.
+//
+// Excerpt from spec:
+//
+//  https://id3.org/id3v2.3.0#ID3v2_header
+//
+//	The ID3v2 tag size is the size of the complete tag after unsychronisation,
+//	including padding, excluding the header but not excluding the extended
+//	header (total tag size - 10). Only 28 bits (representing up to 256MB) are
+//	used in the size description to avoid the introducuction of
+//	'false syncsignals'.
+func (t *Tag) Size() int {
+	return t.Header.size
+}
+
+// TotalSize returns total bytes of the ID3 tag, including header, frames and padding.
+func (t *Tag) TotalSize() int {
+	return t.Header.size + lenOfHeader
+}
 
 type FrameWithOffset struct {
 	Frame
 
-	// location in the input stream
+	// Offset is the location in the data part, excluding tag header (10 bytes)
+	// To get the offset from the first byte of ID3 tag, plus 10.
 	Offset int
 }
 
 // String returns Frame.String() with offset prefix.
 func (f *FrameWithOffset) String() string {
-	return fmt.Sprintf("[%04X] %s", f.Offset, f.Frame.String())
+	return fmt.Sprintf("[%04X] %s", f.Offset+lenOfHeader, f.Frame.String())
 }
 
-// ReadFrames reads all ID3 tags
+// Parse reads the whole ID3 tag from input r.
 //
-// returns total bytes of ID3 data (header + frames) and slice of frames
-func ReadFrames(r io.Reader) (int, []FrameWithOffset, error) {
+// Returns parsed Tag and totalRead bytes if successful.
+//
+func Parse(r io.Reader) (tag *Tag, totalRead int64, err error) {
 	/*
 		https://id3.org/id3v2.3.0
 		ID3v2/file identifier   "ID3"
@@ -28,53 +58,64 @@ func ReadFrames(r io.Reader) (int, []FrameWithOffset, error) {
 		ID3v2 flags             %abc00000
 		ID3v2 size              4 * %0xxxxxxx
 	*/
+	totalRead = 0
+
 	headerBytes := [lenOfHeader]byte{}
-	_, err := r.Read(headerBytes[:])
+	n, err := r.Read(headerBytes[:])
+	totalRead += int64(n)
 
 	if err != nil {
-		return 0, nil, err
+		return
 	}
 
 	header, err := parseHeader(headerBytes)
 
 	if err != nil {
-		return 0, nil, err
+		return
 	}
 
-	frames := make([]FrameWithOffset, 0)
+	tag = &Tag{
+		Header: *header,
+		Frames: make([]FrameWithOffset, 0),
+		// PaddingSize to be calculated later
+	}
 
+	// Avoid read exceeding ID3 Tag boundary
+	lr := io.LimitReader(r, int64(tag.Header.size))
+
+	// offset from header
 	offset := 0
-	for offset < header.Size() {
-		frame, totalRead, err := readNextFrame(r)
-		if err != nil {
-			err = fmt.Errorf("read frame failed at %04X, err: %s", offset, err)
-			break
+	for offset < tag.Header.size {
+		frame, n, readErr := readNextFrame(lr)
+		totalRead += int64(n)
+
+		if readErr != nil {
+			// Aborts reading further ID3 frames.
+			err = fmt.Errorf("read frame failed at %04X, err: %s", offset+lenOfHeader, readErr)
+			return
 		}
 
-		frameWithOffset := FrameWithOffset{Frame: *frame, Offset: offset + lenOfHeader}
+		frameWithOffset := FrameWithOffset{Frame: *frame, Offset: offset}
 
-		offset += totalRead
+		offset += n
 
 		if frame.Size() == 0 {
 			// reached end of id3tags. Bye
 			break
 		} else {
-			frames = append(frames, frameWithOffset)
+			tag.Frames = append(tag.Frames, frameWithOffset)
 		}
 	}
 
-	total := offset + lenOfHeader
+	tag.PaddingSize = tag.Header.size - offset
 
-	discard := [1]byte{}
+	// discard padding bytes
+	nDiscarded, err := io.CopyN(ioutil.Discard, lr, int64(tag.PaddingSize))
+	totalRead += nDiscarded
 
-	// read through all 0's between id3tags and mp3 audio frame
-	// Example: Hindenburg Journalist, pads ID3 tags until 64KB.
-	for ; offset < header.Size(); offset++ {
-		_, err := r.Read(discard[:])
-		if err != nil {
-			return total, frames, err
-		}
+	if err != nil {
+		return
 	}
 
-	return total, frames, nil
+	return
 }
