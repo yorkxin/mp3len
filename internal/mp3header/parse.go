@@ -43,12 +43,9 @@ const (
 	ChannelModeMono        = 0b11
 )
 
-type AudioVersionValue uint32
-type LayerValue uint32
-
 type MP3Header struct {
-	AudioVersion AudioVersionValue
-	Layer        LayerValue
+	AudioVersion int
+	Layer        int
 	BitRate      int
 	SampleFreq   int
 	ChannelMode  int
@@ -65,11 +62,11 @@ func (h MP3Header) String() string {
 }
 
 type bitRateArray [16]int
-type bitRateLayerDict map[LayerValue]bitRateArray
+type bitRateLayerDict map[int]bitRateArray
 
 // 0 means free format
 // -1 means bad bit rate
-var bitRateTopDict = map[AudioVersionValue]bitRateLayerDict{
+var bitRateTopDict = map[int]bitRateLayerDict{
 	Version1: {
 		Layer1: [16]int{0, 32, 64, 92, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, -1},
 		Layer2: [16]int{0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, -1},
@@ -83,13 +80,13 @@ var bitRateTopDict = map[AudioVersionValue]bitRateLayerDict{
 	},
 }
 
-var sampleRateDict = map[AudioVersionValue][4]int{
+var sampleRateDict = map[int][4]int{
 	Version1:   {44100, 48000, 32000, -1},
 	Version2:   {22050, 24000, 16000, -1},
 	Version2_5: {11025, 12000, 8000, -1},
 }
 
-func getBitRate(version AudioVersionValue, layer LayerValue, bitRateIndex int) (int, error) {
+func getBitRate(version int, layer int, bitRateIndex int) (int, error) {
 	if version == Version2_5 {
 		version = Version2
 	}
@@ -112,7 +109,7 @@ func getBitRate(version AudioVersionValue, layer LayerValue, bitRateIndex int) (
 	return bitRateLookup[bitRateIndex], nil
 }
 
-func getSampleFreq(version AudioVersionValue, sampleRateIndex int) (int, error) {
+func getSampleFreq(version int, sampleRateIndex int) (int, error) {
 	sampleRateLookup, ok := sampleRateDict[version]
 
 	if !ok {
@@ -140,8 +137,8 @@ func ParseMP3Header(headerBits uint32) (header MP3Header, err error) {
 		return
 	}
 
-	header.AudioVersion = AudioVersionValue((headerBits & mpegFlagAudioVersion) >> 19)
-	header.Layer = LayerValue((headerBits & mpegFlagLayerDesc) >> 17)
+	header.AudioVersion = int((headerBits & mpegFlagAudioVersion) >> 19)
+	header.Layer = int((headerBits & mpegFlagLayerDesc) >> 17)
 	bitRateIndex := int((headerBits & mpegFlagBitRate) >> 12)
 	sampleFreqIndex := int((headerBits & mpegFlagSampleFreq) >> 10)
 	header.ChannelMode = int((headerBits & mpegFlagChannelMode) >> 6)
