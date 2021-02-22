@@ -15,7 +15,7 @@ import (
 type Metadata struct {
 	duration  time.Duration       // Estimated duration of the MP3
 	mp3Header mp3header.MP3Header // MP3 Audio Frame Header (first frame only)
-	id3Frames []id3.ID3Frame      // ID3 frames
+	id3Frames []id3.Frame         // ID3 frames
 	id3Size   uint32              // total length of id3 frames
 }
 

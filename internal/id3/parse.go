@@ -17,7 +17,7 @@ const lenOfHeader = 10  // fixed length defined by ID3v2 spec
 const textEncodingLatin1 = 0x00
 const textEncodingUTF16 = 0x01
 
-type ID3Frame struct {
+type Frame struct {
 	ID     string // 4-char
 	Size   uint32
 	Flags  uint16
@@ -25,7 +25,7 @@ type ID3Frame struct {
 	Offset uint32 // byte offset from the id3 header (i.e. first frame offset = 0x0A)
 }
 
-func (frame *ID3Frame) String() string {
+func (frame *Frame) String() string {
 	var content string
 
 	if frame.hasText() {
@@ -42,7 +42,7 @@ func (frame *ID3Frame) String() string {
 	return fmt.Sprintf("[%04X] %s %-5d %016b %s", frame.Offset, frame.ID, frame.Size, frame.Flags, content)
 }
 
-func (frame *ID3Frame) hasText() bool {
+func (frame *Frame) hasText() bool {
 	return frame.ID[0] == 'T' || frame.ID[0] == 'W'
 }
 
@@ -110,7 +110,7 @@ func calculateID3TagSize(data []byte) uint32 {
 	return size
 }
 
-func readNextFrame(r io.Reader) (frame *ID3Frame, totalRead int, err error) {
+func readNextFrame(r io.Reader) (frame *Frame, totalRead int, err error) {
 	header := make([]byte, 10)
 	n, err := r.Read(header)
 	totalRead += n
@@ -133,7 +133,7 @@ func readNextFrame(r io.Reader) (frame *ID3Frame, totalRead int, err error) {
 	n, _ = io.ReadFull(r, data)
 	totalRead += n
 
-	frame = &ID3Frame{
+	frame = &Frame{
 		ID:    id,
 		Size:  size,
 		Flags: flags,
@@ -146,7 +146,7 @@ func readNextFrame(r io.Reader) (frame *ID3Frame, totalRead int, err error) {
 // ReadFrames reads all ID3 tags
 //
 // returns total bytes of ID3 data (header + frames) and slice of frames
-func ReadFrames(r io.Reader) (uint32, []ID3Frame, error) {
+func ReadFrames(r io.Reader) (uint32, []Frame, error) {
 	/*
 		https://id3.org/id3v2.3.0
 		ID3v2/file identifier   "ID3"
@@ -154,7 +154,7 @@ func ReadFrames(r io.Reader) (uint32, []ID3Frame, error) {
 		ID3v2 flags             %abc00000
 		ID3v2 size              4 * %0xxxxxxx
 	*/
-	frames := make([]ID3Frame, 0)
+	frames := make([]Frame, 0)
 
 	header := make([]byte, lenOfHeader)
 	_, err := r.Read(header)
