@@ -16,7 +16,7 @@ type Metadata struct {
 	duration  time.Duration       // Estimated duration of the MP3
 	mp3Header mp3header.MP3Header // MP3 Audio Frame Header (first frame only)
 	id3Frames []id3.Frame         // ID3 frames
-	id3Size   uint32              // total length of id3 frames
+	id3Size   int                 // total length of id3 frames
 }
 
 func (metadata *Metadata) calculateDuration(totalSize int64) {
@@ -50,6 +50,8 @@ func (metadata *Metadata) String(verbose bool) string {
 
 // GetInfo takes a reader, then returns metadata of the MP3, includes estimated duration
 // If the data doesn't seem like an MP3, it returns an error
+//
+// totalSize is int64 to align with FileInfo.Size() and http.Response.ContentLength
 func GetInfo(r io.Reader, totalSize int64) (*Metadata, error) {
 	var metadata Metadata
 	var err error

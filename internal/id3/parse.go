@@ -18,11 +18,23 @@ const textEncodingLatin1 = 0x00
 const textEncodingUTF16 = 0x01
 
 type Frame struct {
-	ID     string // 4-char
-	Size   uint32
-	Flags  uint16
-	Data   []byte
-	Offset uint32 // byte offset from the id3 header (i.e. first frame offset = 0x0A)
+	ID string // 4-char
+
+	// It's safe to store Size as a signed int, even if the spec says it uses
+	// 32-bit integer without specifying it's signed or unsigned, because
+	// the size section of tag header can only store an 28-bit signed integer.
+	//
+	// See calculateID3TagSize for details.
+	Size  int
+	Flags uint16
+	Data  []byte
+
+	// Byte offset from the id3 header (First frame offset (0x0A) + X).
+	//
+	// Not decoded from frame data, but added by readNextFrame() function.
+	//
+	// It's safe to store Offset as a signed int, see comments for Size field.
+	Offset int
 }
 
 func (frame *Frame) String() string {
@@ -98,13 +110,13 @@ func binaryView(buf []byte, max int) string {
 //     => 0x101
 //     => 257 (dec)
 //
-func calculateID3TagSize(data []byte) uint32 {
-	var size uint32 = 0
+func calculateID3TagSize(data []byte) int {
+	size := 0
 
 	// FIXME: handle len(data) < 4
 	for place := 0; place < 4; place++ {
 		value := data[place]
-		size += uint32(value) << ((3 - place) * 7)
+		size += int(value) << ((3 - place) * 7)
 	}
 
 	return size
@@ -123,7 +135,10 @@ func readNextFrame(r io.Reader) (frame *Frame, totalRead int, err error) {
 	// Flags          $xx xx
 
 	id := string(header[0:4])
-	size := binary.BigEndian.Uint32(header[4:8])
+
+	// ignoring sign bit. See comments for Size field.
+	// FIXME: find a way to read signed int directly, without explicit type conversion
+	size := int(binary.BigEndian.Uint32(header[4:8]))
 	flags := binary.BigEndian.Uint16(header[8:10])
 	data := make([]byte, size)
 	// In case of HTTP response body, r is a bufio.Reader, and in some cases
@@ -146,7 +161,7 @@ func readNextFrame(r io.Reader) (frame *Frame, totalRead int, err error) {
 // ReadFrames reads all ID3 tags
 //
 // returns total bytes of ID3 data (header + frames) and slice of frames
-func ReadFrames(r io.Reader) (uint32, []Frame, error) {
+func ReadFrames(r io.Reader) (int, []Frame, error) {
 	/*
 		https://id3.org/id3v2.3.0
 		ID3v2/file identifier   "ID3"
@@ -173,7 +188,7 @@ func ReadFrames(r io.Reader) (uint32, []Frame, error) {
 	// ignoring [5] (8-bit, flags)
 	size := calculateID3TagSize(header[6:lenOfHeader]) // 6, 7, 8, 9
 
-	var offset uint32 = 0
+	offset := 0
 	for offset < size {
 		frame, totalRead, err := readNextFrame(r)
 		if err != nil {
@@ -182,7 +197,7 @@ func ReadFrames(r io.Reader) (uint32, []Frame, error) {
 		}
 
 		frame.Offset = offset + lenOfHeader
-		offset += uint32(totalRead)
+		offset += totalRead
 
 		if frame.Size == 0 {
 			// reached end of id3tags. Bye
