@@ -51,7 +51,7 @@ type MP3Header struct {
 	ChannelMode  int
 }
 
-func (h MP3Header) String() string {
+func (h *MP3Header) String() string {
 	return fmt.Sprintf(
 		"MPEG-%s Layer %s, %d kbps, %dHz",
 		[]string{"2.5", "?", "2", "1"}[h.AudioVersion],
