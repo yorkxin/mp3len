@@ -154,10 +154,11 @@ func ReadFrames(r io.Reader) (uint32, []Frame, error) {
 		ID3v2 flags             %abc00000
 		ID3v2 size              4 * %0xxxxxxx
 	*/
+	header := [lenOfHeader]byte{}
+
 	frames := make([]Frame, 0)
 
-	header := make([]byte, lenOfHeader)
-	_, err := r.Read(header)
+	_, err := r.Read(header[:])
 
 	if err != nil {
 		return 0, nil, err
@@ -193,10 +194,12 @@ func ReadFrames(r io.Reader) (uint32, []Frame, error) {
 
 	total := offset + lenOfHeader
 
+	discard := [1]byte{}
+
 	// read through all 0's between id3tags and mp3 audio frame
 	// Example: Hindenburg Journalist, pads ID3 tags until 64KB.
-	for discard := make([]byte, 1); offset < size; offset++ {
-		_, err := r.Read(discard)
+	for ; offset < size; offset++ {
+		_, err := r.Read(discard[:])
 		if err != nil {
 			return total, frames, err
 		}
