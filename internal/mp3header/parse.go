@@ -93,17 +93,17 @@ func getBitRate(version int, layer int, bitRateIndex int) (int, error) {
 
 	layerDict, ok := bitRateTopDict[version]
 	if !ok {
-		return -1, fmt.Errorf("Invalid version: %02b", version)
+		return -1, fmt.Errorf("invalid version: %02b", version)
 	}
 
 	bitRateLookup, ok := layerDict[layer]
 
 	if !ok {
-		return -1, fmt.Errorf("Invalid layer: %02b", layer)
+		return -1, fmt.Errorf("invalid layer: %02b", layer)
 	}
 
 	if bitRateIndex > len(bitRateLookup) {
-		return -1, fmt.Errorf("Invalid bitRateIndex: %04b", bitRateIndex)
+		return -1, fmt.Errorf("invalid bitRateIndex: %04b", bitRateIndex)
 	}
 
 	return bitRateLookup[bitRateIndex], nil
@@ -113,11 +113,11 @@ func getSampleFreq(version int, sampleRateIndex int) (int, error) {
 	sampleRateLookup, ok := sampleRateDict[version]
 
 	if !ok {
-		return -1, fmt.Errorf("Invalid version: %02b", version)
+		return -1, fmt.Errorf("invalid version: %02b", version)
 	}
 
 	if sampleRateIndex > len(sampleRateLookup) {
-		return -1, fmt.Errorf("Invalid sampleRateIndex: %04b", sampleRateIndex)
+		return -1, fmt.Errorf("invalid sampleRateIndex: %04b", sampleRateIndex)
 	}
 
 	return sampleRateLookup[sampleRateIndex], nil

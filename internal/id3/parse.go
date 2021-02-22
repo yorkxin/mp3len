@@ -60,7 +60,7 @@ func decodeString(data []byte) (string, error) {
 		return decodeUTF16String(data[1:])
 	} else {
 		// Undefined text encoding
-		return "", fmt.Errorf("Unable to decode string")
+		return "", fmt.Errorf("unable to decode string")
 	}
 }
 

@@ -12,7 +12,7 @@ import (
 	"github.com/yorkxin/mp3len"
 )
 
-var errInvalidInput = fmt.Errorf("First argument must be a path or HTTP URL")
+var errInvalidInput = fmt.Errorf("first argument must be a path or HTTP URL")
 
 func openFile(location *url.URL) (io.ReadCloser, int64, error) {
 	f, err := os.Open(location.Path)
