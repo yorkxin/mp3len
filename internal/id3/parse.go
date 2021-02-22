@@ -51,7 +51,7 @@ func (frame *Frame) hasText() bool {
 // be returned, and the secondary return value will be bool(false).
 //
 // FIXME: support TXXX and WXXX which has 3 sections, encoding flag, description
-// and text, sepearted by 0x00{1,2}
+// and text, separated by 0x00{1,2}
 func decodeString(data []byte) (string, error) {
 	// First byte is encoding flag
 	if data[0] == textEncodingLatin1 {
