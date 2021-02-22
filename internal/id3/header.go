@@ -43,10 +43,23 @@ func calculateID3TagSize(data []byte) int {
 	return size
 }
 
+// TODO: extract below to parse.go
+type FrameWithOffset struct {
+	Frame
+
+	// location in the input stream
+	Offset int
+}
+
+// String returns Frame.String() with offset prefix.
+func (f *FrameWithOffset) String() string {
+	return fmt.Sprintf("[%04X] %s", f.Offset, f.Frame.String())
+}
+
 // ReadFrames reads all ID3 tags
 //
 // returns total bytes of ID3 data (header + frames) and slice of frames
-func ReadFrames(r io.Reader) (int, []Frame, error) {
+func ReadFrames(r io.Reader) (int, []FrameWithOffset, error) {
 	/*
 		https://id3.org/id3v2.3.0
 		ID3v2/file identifier   "ID3"
@@ -56,7 +69,7 @@ func ReadFrames(r io.Reader) (int, []Frame, error) {
 	*/
 	header := [lenOfHeader]byte{}
 
-	frames := make([]Frame, 0)
+	frames := make([]FrameWithOffset, 0)
 
 	_, err := r.Read(header[:])
 
@@ -81,14 +94,15 @@ func ReadFrames(r io.Reader) (int, []Frame, error) {
 			break
 		}
 
-		frame.Offset = offset + lenOfHeader
+		frameWithOffset := FrameWithOffset{Frame: *frame, Offset: offset + lenOfHeader}
+
 		offset += totalRead
 
-		if frame.Size == 0 {
+		if frame.Size() == 0 {
 			// reached end of id3tags. Bye
 			break
 		} else {
-			frames = append(frames, *frame)
+			frames = append(frames, frameWithOffset)
 		}
 	}
 

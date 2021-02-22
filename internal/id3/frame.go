@@ -14,24 +14,33 @@ import (
 const textEncodingLatin1 = 0x00
 const textEncodingUTF16 = 0x01
 
+const headerLength = 10
+
 type Frame struct {
 	ID string // 4-char
 
-	// It's safe to store Size as a signed int, even if the spec says it uses
+	// It's safe to represent size as a signed int, even if the spec says it uses
 	// 32-bit integer without specifying it's signed or unsigned, because
 	// the size section of tag header can only store an 28-bit signed integer.
 	//
 	// See calculateID3TagSize for details.
-	Size  int
+	size  int
 	Flags uint16
-	Data  []byte
 
-	// Byte offset from the id3 header (First frame offset (0x0A) + X).
-	//
-	// Not decoded from frame data, but added by readNextFrame() function.
-	//
-	// It's safe to store Offset as a signed int, see comments for Size field.
-	Offset int
+	Data []byte
+}
+
+// Size returns the parsed size as int stored in frame header.
+func (frame *Frame) Size() int {
+	// Wrapped as a method for better encapsulation
+	return frame.size
+}
+
+// FrameSize returns the total size of this ID3 tag frame in bytes.
+//
+// This is frame data size + header length (10 bytes).
+func (frame *Frame) FrameSize() int {
+	return frame.size + headerLength
 }
 
 func (frame *Frame) String() string {
@@ -48,7 +57,7 @@ func (frame *Frame) String() string {
 		content = binaryView(frame.Data, 100)
 	}
 
-	return fmt.Sprintf("[%04X] %s %-5d %016b %s", frame.Offset, frame.ID, frame.Size, frame.Flags, content)
+	return fmt.Sprintf("%s %-5d %016b %s", frame.ID, frame.Size(), frame.Flags, content)
 }
 
 func (frame *Frame) hasText() bool {
@@ -122,7 +131,7 @@ func readNextFrame(r io.Reader) (frame *Frame, totalRead int, err error) {
 
 	frame = &Frame{
 		ID:    id,
-		Size:  size,
+		size:  size,
 		Flags: flags,
 		Data:  data,
 	}

@@ -13,10 +13,10 @@ import (
 
 // Metadata holds the parsed metadata of an MP3 input
 type Metadata struct {
-	duration  time.Duration       // Estimated duration of the MP3
-	mp3Header mp3header.MP3Header // MP3 Audio Frame Header (first frame only)
-	id3Frames []id3.Frame         // ID3 frames
-	id3Size   int                 // total length of id3 frames
+	duration  time.Duration         // Estimated duration of the MP3
+	mp3Header mp3header.MP3Header   // MP3 Audio Frame Header (first frame only)
+	id3Frames []id3.FrameWithOffset // ID3 frames
+	id3Size   int                   // total length of id3 frames
 }
 
 func (metadata *Metadata) calculateDuration(totalSize int64) {
