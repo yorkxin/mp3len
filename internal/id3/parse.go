@@ -11,8 +11,8 @@ import (
 	"golang.org/x/text/transform"
 )
 
-const id3v2Flag = "ID3" // first 3 bytes of an MP3 file with ID3v2 tag
-const lenOfHeader = 10  // fixed length defined by ID3v2 spec
+var id3v2Flag = []byte("ID3") // first 3 bytes of an MP3 file with ID3v2 tag
+const lenOfHeader = 10        // fixed length defined by ID3v2 spec
 
 const textEncodingLatin1 = 0x00
 const textEncodingUTF16 = 0x01
@@ -164,7 +164,7 @@ func ReadFrames(r io.Reader) (uint32, []Frame, error) {
 		return 0, nil, err
 	}
 
-	if string(header[0:3]) != id3v2Flag {
+	if bytes.Compare(header[0:3], id3v2Flag) != 0 {
 		err = fmt.Errorf("does not look like an MP3 file")
 		return 0, nil, err
 	}
