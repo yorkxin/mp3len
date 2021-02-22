@@ -1,4 +1,4 @@
-package mpeg
+package mp3header
 
 // For MPEG header format, see: http://www.mp3-tech.org/programmer/frame_header.html
 

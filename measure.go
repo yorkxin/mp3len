@@ -7,22 +7,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yorkxin/mp3len/id3"
-	"github.com/yorkxin/mp3len/mpeg"
+	"github.com/yorkxin/mp3len/internal/id3"
+	"github.com/yorkxin/mp3len/internal/mp3header"
 )
 
 // Metadata holds the parsed metadata of an MP3 input
 type Metadata struct {
-	duration  time.Duration  // Estimated duration of the MP3
-	mp3Header mpeg.MP3Header // MP3 Audio Frame Header (first frame only)
-	id3Frames []id3.ID3Frame // ID3 frames
-	id3Size   uint32         // total length of id3 frames
+	duration  time.Duration       // Estimated duration of the MP3
+	mp3Header mp3header.MP3Header // MP3 Audio Frame Header (first frame only)
+	id3Frames []id3.ID3Frame      // ID3 frames
+	id3Size   uint32              // total length of id3 frames
 }
 
 func (metadata *Metadata) calculateDuration(totalSize int64) {
 	metadata.duration = time.Duration((totalSize - int64(metadata.id3Size)) / (int64(metadata.mp3Header.BitRate) / 8) * 1000000)
 
-	if metadata.mp3Header.ChannelMode == mpeg.ChannelModeMono {
+	if metadata.mp3Header.ChannelMode == mp3header.ChannelModeMono {
 		metadata.duration *= 2
 	}
 }
@@ -67,7 +67,7 @@ func GetInfo(r io.Reader, totalSize int64) (*Metadata, error) {
 		return &metadata, err
 	}
 
-	if metadata.mp3Header, err = mpeg.ParseMP3Header(headerBits); err != nil {
+	if metadata.mp3Header, err = mp3header.Parse(headerBits); err != nil {
 		return &metadata, err
 	}
 
