@@ -55,7 +55,7 @@ func (h *MP3Header) String() string {
 	return fmt.Sprintf(
 		"MPEG-%s Layer %s, %d kbps, %dHz",
 		[]string{"2.5", "?", "2", "1"}[h.AudioVersion],
-		[]string{"?", "III", "II", "I"}[int(h.Layer)],
+		[]string{"?", "III", "II", "I"}[h.Layer],
 		h.BitRate,
 		h.SampleFreq,
 	)
