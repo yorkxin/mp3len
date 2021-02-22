@@ -123,8 +123,8 @@ func getSampleFreq(version int, sampleRateIndex int) (int, error) {
 	return sampleRateLookup[sampleRateIndex], nil
 }
 
-// ParseMP3Header parses MP3 header by reading a 4-byte data.
-func ParseMP3Header(headerBits uint32) (header MP3Header, err error) {
+// Parse parses MP3 header by reading a 4-byte data.
+func Parse(headerBits uint32) (header MP3Header, err error) {
 	header = MP3Header{
 		AudioVersion: 0xF,
 		Layer:        0xF,
