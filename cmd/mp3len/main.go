@@ -77,7 +77,7 @@ func main() {
 
 	location, err := url.Parse(flag.Arg(0))
 
-	if location.Path == "" || err != nil {
+	if location == nil || location.Path == "" || err != nil {
 		fmt.Fprintln(os.Stderr, errInvalidInput)
 		os.Exit(1)
 	}
