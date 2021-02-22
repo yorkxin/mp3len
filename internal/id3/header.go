@@ -2,6 +2,7 @@ package id3
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -13,9 +14,17 @@ type Header struct {
 	Version  int
 	Revision int
 	Flags    uint8
+	size     int
+}
 
-	// total size of the ID3 tags
-	Size int
+// Size returns total bytes of the ID3 tags, excluding header.
+func (h *Header) Size() int {
+	return h.size
+}
+
+// TagSize returns total bytes of the ID3 tags, including header.
+func (h *Header) TagSize() int {
+	return h.size + lenOfHeader
 }
 
 // calculateID3TagSize returns an integer from 4-byte (32-bit) input.
@@ -43,6 +52,23 @@ func calculateID3TagSize(data []byte) int {
 	return size
 }
 
+func parseHeader(headerBytes [lenOfHeader]byte) (*Header, error) {
+	if bytes.Compare(headerBytes[0:3], id3v2Flag) != 0 {
+		return nil, errors.New("does not look like an MP3 file")
+	}
+
+	// ignoring [3] and [4] (version)
+	// ignoring [5] (8-bit, flags)
+	size := calculateID3TagSize(headerBytes[6:lenOfHeader]) // 6, 7, 8, 9
+
+	return &Header{
+		Version:  0,
+		Revision: 0,
+		Flags:    0,
+		size:     size,
+	}, nil
+}
+
 // TODO: extract below to parse.go
 type FrameWithOffset struct {
 	Frame
@@ -67,27 +93,23 @@ func ReadFrames(r io.Reader) (int, []FrameWithOffset, error) {
 		ID3v2 flags             %abc00000
 		ID3v2 size              4 * %0xxxxxxx
 	*/
-	header := [lenOfHeader]byte{}
-
-	frames := make([]FrameWithOffset, 0)
-
-	_, err := r.Read(header[:])
+	headerBytes := [lenOfHeader]byte{}
+	_, err := r.Read(headerBytes[:])
 
 	if err != nil {
 		return 0, nil, err
 	}
 
-	if bytes.Compare(header[0:3], id3v2Flag) != 0 {
-		err = fmt.Errorf("does not look like an MP3 file")
+	header, err := parseHeader(headerBytes)
+
+	if err != nil {
 		return 0, nil, err
 	}
 
-	// ignoring [3] and [4] (version)
-	// ignoring [5] (8-bit, flags)
-	size := calculateID3TagSize(header[6:lenOfHeader]) // 6, 7, 8, 9
+	frames := make([]FrameWithOffset, 0)
 
 	offset := 0
-	for offset < size {
+	for offset < header.Size() {
 		frame, totalRead, err := readNextFrame(r)
 		if err != nil {
 			err = fmt.Errorf("read frame failed at %04X, err: %s", offset, err)
@@ -112,7 +134,7 @@ func ReadFrames(r io.Reader) (int, []FrameWithOffset, error) {
 
 	// read through all 0's between id3tags and mp3 audio frame
 	// Example: Hindenburg Journalist, pads ID3 tags until 64KB.
-	for ; offset < size; offset++ {
+	for ; offset < header.Size(); offset++ {
 		_, err := r.Read(discard[:])
 		if err != nil {
 			return total, frames, err
