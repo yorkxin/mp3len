@@ -123,8 +123,8 @@ func calculateID3TagSize(data []byte) int {
 }
 
 func readNextFrame(r io.Reader) (frame *Frame, totalRead int, err error) {
-	header := make([]byte, 10)
-	n, err := r.Read(header)
+	header := [10]byte{}
+	n, err := r.Read(header[:])
 	totalRead += n
 	if err != nil {
 		return
