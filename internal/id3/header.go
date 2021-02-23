@@ -3,6 +3,7 @@ package id3
 import (
 	"bytes"
 	"errors"
+	"fmt"
 )
 
 var id3v2Flag = []byte("ID3") // first 3 bytes of an MP3 file with ID3v2 tag
@@ -16,6 +17,12 @@ type Header struct {
 	// Parsed from header payload by calculateID3TagSize.
 	// The size does not include header itself (always 10 bytes)
 	size int
+}
+
+// String returns human-readable description of the ID3 header
+func (h *Header) String() string {
+	// TODO: describe flags
+	return fmt.Sprintf("format=ID3v2.%d.%d, size=%d", h.Version, h.Revision, h.size)
 }
 
 // calculateID3TagSize returns an integer from 4-byte (32-bit) input.

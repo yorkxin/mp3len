@@ -50,7 +50,7 @@ func (f *FrameWithOffset) String() string {
 //
 // Returns parsed Tag and totalRead bytes if successful.
 //
-func Parse(r io.Reader) (tag *Tag, totalRead int, err error) {
+func Parse(r io.Reader) (*Tag, int, error) {
 	/*
 		https://id3.org/id3v2.3.0
 		ID3v2/file identifier   "ID3"
@@ -58,41 +58,37 @@ func Parse(r io.Reader) (tag *Tag, totalRead int, err error) {
 		ID3v2 flags             %abc00000
 		ID3v2 size              4 * %0xxxxxxx
 	*/
-	totalRead = 0
+	totalRead := 0
 
 	headerBytes := [lenOfHeader]byte{}
 	n, err := r.Read(headerBytes[:])
 	totalRead += n
 
 	if err != nil {
-		return
+		return nil, totalRead, err
 	}
 
 	header, err := parseHeader(headerBytes)
 
 	if err != nil {
-		return
+		return nil, totalRead, err
 	}
 
-	tag = &Tag{
-		Header: *header,
-		Frames: make([]FrameWithOffset, 0),
-		// PaddingSize to be calculated later
-	}
+	frames := make([]FrameWithOffset, 0)
 
 	// Avoid read exceeding ID3 Tag boundary
-	lr := io.LimitReader(r, int64(tag.Header.size))
+	lr := io.LimitReader(r, int64(header.size))
 
 	// offset from header
 	offset := 0
-	for offset < tag.Header.size {
+	for offset < header.size {
 		frame, n, readErr := readNextFrame(lr)
 		totalRead += n
 
 		if readErr != nil {
 			// Aborts reading further ID3 frames.
 			err = fmt.Errorf("read frame failed at %04X, err: %s", offset+lenOfHeader, readErr)
-			return
+			return nil, totalRead, err
 		}
 
 		if frame == nil {
@@ -101,19 +97,23 @@ func Parse(r io.Reader) (tag *Tag, totalRead int, err error) {
 		}
 
 		frameWithOffset := FrameWithOffset{Frame: *frame, Offset: offset}
-		tag.Frames = append(tag.Frames, frameWithOffset)
+		frames = append(frames, frameWithOffset)
 		offset += n
 	}
 
-	tag.PaddingSize = tag.Header.size - totalRead + lenOfHeader
+	paddingSize := header.size + lenOfHeader - totalRead
 
 	// discard padding bytes
-	nDiscarded, err := io.CopyN(ioutil.Discard, lr, int64(tag.PaddingSize))
+	nDiscarded, err := io.CopyN(ioutil.Discard, lr, int64(paddingSize))
 	totalRead += int(nDiscarded)
 
 	if err != nil {
-		return
+		return nil, totalRead, err
 	}
 
-	return
+	return &Tag{
+		Header:      *header,
+		Frames:      frames,
+		PaddingSize: paddingSize,
+	}, totalRead, nil
 }
