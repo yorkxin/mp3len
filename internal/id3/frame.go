@@ -125,9 +125,13 @@ func readNextFrame(r io.Reader) (frame *Frame, totalRead int, err error) {
 	// In case of HTTP response body, r is a bufio.Reader, and in some cases
 	// r.Read() may not fill the whole len(data). Using io.ReadFull ensures it
 	// fills the whole len(data) slice.
-	// FIXME: handle err
-	n, _ = io.ReadFull(r, data)
+	n, err = io.ReadFull(r, data)
+
 	totalRead += n
+
+	if err != nil {
+		return
+	}
 
 	frame = &Frame{
 		ID:    id,
