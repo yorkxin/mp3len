@@ -103,18 +103,25 @@ func binaryView(buf []byte, max int) string {
 	return fmt.Sprintf("%x", buf)
 }
 
-func readNextFrame(r io.Reader) (frame *Frame, totalRead int, err error) {
+// readNextFrame reads an ID3 frame from the reader.
+//
+// Returns a pointer to Frame and total bytes read (int) if successful.
+//
+// Returns nil *Frame and nil error when all data are 0x00 (padding). The caller
+// should discard all the remaining data up to end of ID3 tag.
+func readNextFrame(r io.Reader) (*Frame, int, error) {
+	totalRead := 0
 	header := [10]byte{}
-	n, err := r.Read(header[:])
+	n, err := io.ReadFull(r, header[:])
 	totalRead += n
 	if err != nil {
-		return
+		return nil, totalRead, err
 	}
 
 	allZero := [10]byte{}
 	if bytes.Compare(header[:], allZero[:]) == 0 {
 		// Reached padding. Exit.
-		return
+		return nil, totalRead, nil
 	}
 
 	// Frame ID       $xx xx xx xx (four characters)
@@ -126,7 +133,7 @@ func readNextFrame(r io.Reader) (frame *Frame, totalRead int, err error) {
 	for _, c := range idRaw {
 		if !(('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')) {
 			err = fmt.Errorf("invalid header: %v", idRaw)
-			return
+			return nil, totalRead, err
 		}
 	}
 
@@ -145,15 +152,13 @@ func readNextFrame(r io.Reader) (frame *Frame, totalRead int, err error) {
 	totalRead += n
 
 	if err != nil {
-		return
+		return nil, totalRead, err
 	}
 
-	frame = &Frame{
+	return &Frame{
 		ID:    id,
 		size:  size,
 		Flags: flags,
 		Data:  data,
-	}
-
-	return
+	}, totalRead, nil
 }
