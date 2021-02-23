@@ -50,7 +50,7 @@ func (f *FrameWithOffset) String() string {
 //
 // Returns parsed Tag and totalRead bytes if successful.
 //
-func Parse(r io.Reader) (tag *Tag, totalRead int64, err error) {
+func Parse(r io.Reader) (tag *Tag, totalRead int, err error) {
 	/*
 		https://id3.org/id3v2.3.0
 		ID3v2/file identifier   "ID3"
@@ -62,7 +62,7 @@ func Parse(r io.Reader) (tag *Tag, totalRead int64, err error) {
 
 	headerBytes := [lenOfHeader]byte{}
 	n, err := r.Read(headerBytes[:])
-	totalRead += int64(n)
+	totalRead += n
 
 	if err != nil {
 		return
@@ -87,7 +87,7 @@ func Parse(r io.Reader) (tag *Tag, totalRead int64, err error) {
 	offset := 0
 	for offset < tag.Header.size {
 		frame, n, readErr := readNextFrame(lr)
-		totalRead += int64(n)
+		totalRead += n
 
 		if readErr != nil {
 			// Aborts reading further ID3 frames.
@@ -95,23 +95,21 @@ func Parse(r io.Reader) (tag *Tag, totalRead int64, err error) {
 			return
 		}
 
-		frameWithOffset := FrameWithOffset{Frame: *frame, Offset: offset}
-
-		offset += n
-
-		if frame.Size() == 0 {
-			// reached end of id3tags. Bye
+		if frame == nil {
+			// reached padding. Bye
 			break
-		} else {
-			tag.Frames = append(tag.Frames, frameWithOffset)
 		}
+
+		frameWithOffset := FrameWithOffset{Frame: *frame, Offset: offset}
+		tag.Frames = append(tag.Frames, frameWithOffset)
+		offset += n
 	}
 
-	tag.PaddingSize = tag.Header.size - offset
+	tag.PaddingSize = tag.Header.size - totalRead + lenOfHeader
 
 	// discard padding bytes
 	nDiscarded, err := io.CopyN(ioutil.Discard, lr, int64(tag.PaddingSize))
-	totalRead += nDiscarded
+	totalRead += int(nDiscarded)
 
 	if err != nil {
 		return

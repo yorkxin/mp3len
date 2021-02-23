@@ -36,7 +36,7 @@ func calculateID3TagSize(data []byte) int {
 
 	// FIXME: handle len(data) < 4
 	for place := 0; place < 4; place++ {
-		value := data[place]
+		value := data[place] & 0b01111111 // effect bits are lower 7 bits
 		size += int(value) << ((3 - place) * 7)
 	}
 
@@ -45,17 +45,18 @@ func calculateID3TagSize(data []byte) int {
 
 func parseHeader(headerBytes [lenOfHeader]byte) (*Header, error) {
 	if bytes.Compare(headerBytes[0:3], id3v2Flag) != 0 {
-		return nil, errors.New("does not look like an MP3 file")
+		return nil, errors.New("invalid ID3 header")
 	}
 
-	// ignoring [3] and [4] (version)
-	// ignoring [5] (8-bit, flags)
+	version := int(headerBytes[3])
+	revision := int(headerBytes[4])
+	flags := headerBytes[5]
 	size := calculateID3TagSize(headerBytes[6:lenOfHeader]) // 6, 7, 8, 9
 
 	return &Header{
-		Version:  0,
-		Revision: 0,
-		Flags:    0,
+		Version:  version,
+		Revision: revision,
+		Flags:    flags,
 		size:     size,
 	}, nil
 }

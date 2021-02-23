@@ -111,11 +111,26 @@ func readNextFrame(r io.Reader) (frame *Frame, totalRead int, err error) {
 		return
 	}
 
+	allZero := [10]byte{}
+	if bytes.Compare(header[:], allZero[:]) == 0 {
+		// Reached padding. Exit.
+		return
+	}
+
 	// Frame ID       $xx xx xx xx (four characters)
 	// Size           $xx xx xx xx
 	// Flags          $xx xx
 
-	id := string(header[0:4])
+	// verify if the id is a valid string
+	idRaw := header[0:4]
+	for _, c := range idRaw {
+		if !(('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')) {
+			err = fmt.Errorf("invalid header: %v", idRaw)
+			return
+		}
+	}
+
+	id := string(idRaw)
 
 	// ignoring sign bit. See comments for Size field.
 	// FIXME: find a way to read signed int directly, without explicit type conversion
