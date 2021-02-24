@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func Test_calculateID3TagSize(t *testing.T) {
+func Test_decodeTagSize(t *testing.T) {
 	type args struct {
 		data []byte
 	}
@@ -21,8 +21,31 @@ func Test_calculateID3TagSize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := calculateID3TagSize(tt.args.data); got != tt.want {
-				t.Errorf("calculateID3TagSize() = %v, want %v", got, tt.want)
+			if got := decodeTagSize(tt.args.data); got != tt.want {
+				t.Errorf("decodeTagSize() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_encodeTagSize(t *testing.T) {
+	type args struct {
+		size int
+	}
+	tests := []struct {
+		name string
+		args args
+		want []byte
+	}{
+		{"spec", args{257}, []byte{0x00, 0x00, 0x02, 0x01}},
+		{"sample 1", args{65526}, []byte{0x00, 0x03, 0x7F, 0x76}},
+		{"max value", args{268435455}, []byte{0x7F, 0x7F, 0x7F, 0x7F}},
+		{"overflow", args{1<<32 - 1}, []byte{0x7F, 0x7F, 0x7F, 0x7F}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := encodeTagSize(tt.args.size); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("encodeTagSize() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -74,6 +97,44 @@ func Test_parseHeader(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("parseHeader() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHeader_Bytes(t *testing.T) {
+	type fields struct {
+		Version  uint8
+		Revision uint8
+		Flags    uint8
+		Size     int
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   []byte
+	}{
+		{
+			name: "OK",
+			fields: fields{
+				Version:  2,
+				Revision: 0,
+				Flags:    0xFF,
+				Size:     256,
+			},
+			want: []byte("ID3\x02\x00\xFF\x00\x00\x02\x00"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &Header{
+				Version:  tt.fields.Version,
+				Revision: tt.fields.Revision,
+				Flags:    tt.fields.Flags,
+				Size:     tt.fields.Size,
+			}
+			if got := h.Bytes(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Bytes() = %v, want %v", got, tt.want)
 			}
 		})
 	}

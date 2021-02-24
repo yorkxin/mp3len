@@ -234,7 +234,7 @@ func readNextFrame(r io.Reader) (*Frame, int, error) {
 	// because the Size section of tag header can only store an 28-bit signed
 	// integer.
 	//
-	// See calculateID3TagSize for details.
+	// See decodeTagSize for details.
 	//
 	// FIXME: find a way to read signed int directly, without explicit type conversion
 	size := int(binary.BigEndian.Uint32(header[4:8]))
