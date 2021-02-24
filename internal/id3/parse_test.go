@@ -66,7 +66,7 @@ func TestParse(t *testing.T) {
 			name: "Compact File",
 			args: args{openTestData("./testdata/id3_compact.bin", 0)},
 			wantTag: &matchedTag{
-				header:      Header{Version: 3, Revision: 0, Flags: 0, size: 330165},
+				header:      Header{Version: 3, Revision: 0, Flags: 0, Size: 330165},
 				paddingSize: 0,
 				frameLength: 16,
 			},
@@ -77,7 +77,7 @@ func TestParse(t *testing.T) {
 			name: "Padded File",
 			args: args{openTestData("./testdata/id3_padded.bin", 0)},
 			wantTag: &matchedTag{
-				header:      Header{Version: 3, Revision: 0, Flags: 0, size: 65526},
+				header:      Header{Version: 3, Revision: 0, Flags: 0, Size: 65526},
 				paddingSize: 53269,
 				frameLength: 17,
 			},

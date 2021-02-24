@@ -45,7 +45,7 @@ func Test_parseHeader(t *testing.T) {
 				Version:  3,
 				Revision: 0,
 				Flags:    0b11100000,
-				size:     257,
+				Size:     257,
 			}, wantErr: false,
 		},
 		{
@@ -55,7 +55,7 @@ func Test_parseHeader(t *testing.T) {
 				Version:  3,
 				Revision: 0,
 				Flags:    0,
-				size:     268435455,
+				Size:     268435455,
 			}, wantErr: false,
 		},
 		{

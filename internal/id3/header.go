@@ -15,14 +15,14 @@ type Header struct {
 	Flags    uint8
 
 	// Parsed from header payload by calculateID3TagSize.
-	// The size does not include header itself (always 10 bytes)
-	size int
+	// The Size does not include header itself (always 10 bytes)
+	Size int
 }
 
 // String returns human-readable description of the ID3 header
 func (h *Header) String() string {
 	// TODO: describe flags
-	return fmt.Sprintf("format=ID3v2.%d.%d, size=%d", h.Version, h.Revision, h.size)
+	return fmt.Sprintf("format=ID3v2.%d.%d, Size=%d", h.Version, h.Revision, h.Size)
 }
 
 // calculateID3TagSize returns an integer from 4-byte (32-bit) input.
@@ -64,6 +64,6 @@ func parseHeader(headerBytes [lenOfHeader]byte) (*Header, error) {
 		Version:  version,
 		Revision: revision,
 		Flags:    flags,
-		size:     size,
+		Size:     size,
 	}, nil
 }

@@ -231,7 +231,7 @@ func readNextFrame(r io.Reader) (*Frame, int, error) {
 
 	// It's safe to represent size as a 32-bit signed int, even if the spec says
 	// it uses 32-bit integer without specifying it's signed or unsigned,
-	// because the size section of tag header can only store an 28-bit signed
+	// because the Size section of tag header can only store an 28-bit signed
 	// integer.
 	//
 	// See calculateID3TagSize for details.

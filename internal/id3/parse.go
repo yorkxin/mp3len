@@ -25,12 +25,12 @@ type Tag struct {
 //	used in the size description to avoid the introducuction of
 //	'false syncsignals'.
 func (t *Tag) Size() int {
-	return t.Header.size
+	return t.Header.Size
 }
 
 // TotalSize returns total bytes of the ID3 tag, including header, frames and padding.
 func (t *Tag) TotalSize() int {
-	return t.Header.size + lenOfHeader
+	return t.Header.Size + lenOfHeader
 }
 
 type FrameWithOffset struct {
@@ -77,11 +77,11 @@ func Parse(r io.Reader) (*Tag, int, error) {
 	frames := make([]FrameWithOffset, 0)
 
 	// Avoid read exceeding ID3 Tag boundary
-	lr := io.LimitReader(r, int64(header.size))
+	lr := io.LimitReader(r, int64(header.Size))
 
 	// offset from header
 	offset := 0
-	for offset < header.size {
+	for offset < header.Size {
 		frame, n, readErr := readNextFrame(lr)
 		totalRead += n
 
@@ -101,7 +101,7 @@ func Parse(r io.Reader) (*Tag, int, error) {
 		offset += n
 	}
 
-	paddingSize := header.size + lenOfHeader - totalRead
+	paddingSize := header.Size + lenOfHeader - totalRead
 
 	// discard padding bytes
 	nDiscarded, err := io.CopyN(ioutil.Discard, lr, int64(paddingSize))
