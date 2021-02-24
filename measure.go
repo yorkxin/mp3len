@@ -19,7 +19,7 @@ type Metadata struct {
 }
 
 func (metadata *Metadata) calculateDuration(totalSize int64) {
-	metadata.duration = time.Duration((totalSize - int64(metadata.id3Tag.TotalSize())) / (int64(metadata.mp3Header.BitRate) / 8) * 1000000)
+	metadata.duration = time.Duration((totalSize - int64(metadata.id3Tag.ByteSize())) / (int64(metadata.mp3Header.BitRate) / 8) * 1000000)
 
 	if metadata.mp3Header.ChannelMode == mp3header.ChannelModeMono {
 		metadata.duration *= 2

@@ -99,6 +99,12 @@ func (frame *Frame) Bytes() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// ByteSize calculates the bytes required to write the payload. It should be
+// len(Data) + 10 bytes of header
+func (frame *Frame) ByteSize() int {
+	return len(frame.Data) + 10
+}
+
 func (frame *Frame) String() string {
 	content, err := frame.Text()
 
@@ -114,7 +120,7 @@ func (frame *Frame) hasText() bool {
 }
 
 func decodeLatin1Text(data []byte) string {
-	terminus := 0
+	terminus := len(data)
 
 	for i, c := range data {
 		if c == 0x0 {
@@ -147,7 +153,7 @@ func decodeUTF16String(buf []byte) (string, error) {
 		return "", err
 	}
 
-	terminus := 0
+	terminus := len(buf16Bit)
 	for i, r := range buf16Bit {
 		if r == 0x0000 {
 			terminus = i

@@ -1,7 +1,7 @@
 package id3
 
 import (
-	"fmt"
+	"bytes"
 	"io"
 	"os"
 	"reflect"
@@ -28,8 +28,10 @@ func openTestData(path string, limit int64) func(t *testing.T) io.Reader {
 	}
 }
 
-func (t *Tag) String() string {
-	return fmt.Sprintf("%s, frames=%d, paddingSize=%d", t.Header.String(), len(t.Frames), t.PaddingSize)
+func testBytes(buf []byte) func(t *testing.T) io.Reader {
+	return func(t *testing.T) io.Reader {
+		return bytes.NewReader(buf)
+	}
 }
 
 func TestParse(t *testing.T) {
@@ -38,9 +40,9 @@ func TestParse(t *testing.T) {
 	}
 
 	type matchedTag struct {
-		header      Header
-		paddingSize int
-		frameLength int
+		version, revision, flags uint8
+		paddingSize              int
+		frameLength              int
 	}
 
 	tagToMatchedTag := func(tag *Tag) *matchedTag {
@@ -49,7 +51,9 @@ func TestParse(t *testing.T) {
 		}
 
 		return &matchedTag{
-			header:      tag.Header,
+			version:     tag.Version,
+			revision:    tag.Revision,
+			flags:       tag.Flags,
 			paddingSize: tag.PaddingSize,
 			frameLength: len(tag.Frames),
 		}
@@ -66,7 +70,18 @@ func TestParse(t *testing.T) {
 			name: "Compact File",
 			args: args{openTestData("./testdata/id3_compact.bin", 0)},
 			wantTag: &matchedTag{
-				header:      Header{Version: 3, Revision: 0, Flags: 0, Size: 330165},
+				version: 3, revision: 0, flags: 0,
+				paddingSize: 0,
+				frameLength: 16,
+			},
+			wantTotalRead: 330175,
+			wantErr:       false,
+		},
+		{
+			name: "Compact File",
+			args: args{openTestData("./testdata/id3_compact.bin", 0)},
+			wantTag: &matchedTag{
+				version: 3, revision: 0, flags: 0,
 				paddingSize: 0,
 				frameLength: 16,
 			},
@@ -77,7 +92,7 @@ func TestParse(t *testing.T) {
 			name: "Padded File",
 			args: args{openTestData("./testdata/id3_padded.bin", 0)},
 			wantTag: &matchedTag{
-				header:      Header{Version: 3, Revision: 0, Flags: 0, Size: 65526},
+				version: 3, revision: 0, flags: 0,
 				paddingSize: 53269,
 				frameLength: 17,
 			},
@@ -89,6 +104,26 @@ func TestParse(t *testing.T) {
 			args:          args{openTestData("/dev/random", 0)},
 			wantTag:       nil,
 			wantTotalRead: 10, // tried to read header
+			wantErr:       true,
+		},
+		{
+			name: "Empty ID3 Tag",
+			args: args{testBytes([]byte("ID3\x03\x00\xE0\x00\x00\x00\x00"))},
+			wantTag: &matchedTag{
+				version:     3,
+				revision:    0,
+				flags:       0b11100000,
+				paddingSize: 0,
+				frameLength: 0,
+			},
+			wantTotalRead: 10,
+			wantErr:       false,
+		},
+		{
+			name:          "Invalid leading bits",
+			args:          args{testBytes([]byte("IE6\x03\x00\x00\x7F\x7F\x7F\x7F"))},
+			wantTag:       nil,
+			wantTotalRead: 10,
 			wantErr:       true,
 		},
 		{
@@ -127,6 +162,52 @@ func TestParse(t *testing.T) {
 
 			if gotTotalRead != tt.wantTotalRead {
 				t.Errorf("Parse() gotTotalRead = %v, want %v", gotTotalRead, tt.wantTotalRead)
+			}
+		})
+	}
+}
+
+func Test_decodeTagSize(t *testing.T) {
+	type args struct {
+		data []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want int
+	}{
+		{"spec", args{data: []byte{0x00, 0x00, 0x02, 0x01}}, 257},
+		{"sample 1", args{data: []byte{0x00, 0x03, 0x7F, 0x76}}, 65526},
+		{"max value", args{data: []byte{0x7F, 0x7F, 0x7F, 0x7F}}, 268435455},
+		{"all set", args{data: []byte{0xFF, 0xFF, 0xFF, 0xFF}}, 268435455},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := decodeTagSize(tt.args.data); got != tt.want {
+				t.Errorf("decodeTagSize() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_encodeTagSize(t *testing.T) {
+	type args struct {
+		size int
+	}
+	tests := []struct {
+		name string
+		args args
+		want []byte
+	}{
+		{"spec", args{257}, []byte{0x00, 0x00, 0x02, 0x01}},
+		{"sample 1", args{65526}, []byte{0x00, 0x03, 0x7F, 0x76}},
+		{"max value", args{268435455}, []byte{0x7F, 0x7F, 0x7F, 0x7F}},
+		{"overflow", args{1<<32 - 1}, []byte{0x7F, 0x7F, 0x7F, 0x7F}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := encodeTagSize(tt.args.size); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("encodeTagSize() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -150,6 +150,16 @@ func TestFrame_Text(t *testing.T) {
 			want:    "My Fancy Album",
 			wantErr: false,
 		}, {
+			name: "Latin-1 Text, not terminated",
+			fields: fields{
+				ID:    "TALB",
+				Flags: 0,
+				Data:  []byte("\x00My Fancy Album"),
+			},
+			want:    "My Fancy Album",
+			wantErr: false,
+		},
+		{
 			name: "Latin-1 Text with data after string termination",
 			fields: fields{
 				ID:    "TALB",
@@ -175,6 +185,16 @@ func TestFrame_Text(t *testing.T) {
 				ID:    "TALB",
 				Flags: 0,
 				Data:  []byte("\x01\xFF\xFE\x16\x4E\x4C\x75\x60\x4F\x7D\x59\x00\x00"),
+			},
+			want:    "世界你好",
+			wantErr: false,
+		},
+		{
+			name: "UTF-16 Text, not terminated",
+			fields: fields{
+				ID:    "TALB",
+				Flags: 0,
+				Data:  []byte("\x01\xFF\xFE\x16\x4E\x4C\x75\x60\x4F\x7D\x59"),
 			},
 			want:    "世界你好",
 			wantErr: false,
@@ -353,6 +373,50 @@ func TestFrame_Bytes(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Bytes() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFrame_ByteSize(t *testing.T) {
+	type fields struct {
+		ID    string
+		Flags uint16
+		Data  []byte
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   int
+	}{
+		{
+			name: "OK",
+			fields: fields{
+				ID:    "PRIV",
+				Flags: 0x007F,
+				Data:  []byte{0xDE, 0xAD, 0xBE, 0xEF},
+			},
+			want: 14,
+		},
+		{
+			name: "Empty",
+			fields: fields{
+				ID:    "PRIV",
+				Flags: 0x007F,
+				Data:  nil,
+			},
+			want: 10,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			frame := &Frame{
+				ID:    tt.fields.ID,
+				Flags: tt.fields.Flags,
+				Data:  tt.fields.Data,
+			}
+			if got := frame.ByteSize(); got != tt.want {
+				t.Errorf("ByteSize() = %v, want %v", got, tt.want)
 			}
 		})
 	}
