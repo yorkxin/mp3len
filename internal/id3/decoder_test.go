@@ -2,171 +2,248 @@ package id3
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"reflect"
 	"testing"
 )
 
-func openTestData(path string, limit int64) func(t *testing.T) io.Reader {
-	return func(t *testing.T) io.Reader {
-		f, err := os.Open(path)
+func openTestData(path string, t *testing.T) io.Reader {
+	f, err := os.Open(path)
 
-		if err != nil {
-			t.Fatal("Failed:", err)
-		}
-
-		t.Cleanup(func() {
-			f.Close()
-		})
-
-		if limit > 0 {
-			return io.LimitReader(f, limit)
-		}
-
-		return f
+	if err != nil {
+		t.Fatal(err)
 	}
+
+	t.Cleanup(func() {
+		f.Close()
+	})
+
+	return f
 }
 
-func testBytes(buf []byte) func(t *testing.T) io.Reader {
-	return func(t *testing.T) io.Reader {
-		return bytes.NewReader(buf)
+func TestDecoder_Decode(t *testing.T) {
+	type fields struct {
+		r io.Reader
+		n int
 	}
-}
-
-func TestParse(t *testing.T) {
-	type args struct {
-		opener func(t *testing.T) io.Reader
-	}
-
-	type matchedTag struct {
-		version, revision, flags uint8
-		paddingSize              int
-		frameLength              int
-	}
-
-	tagToMatchedTag := func(tag *Tag) *matchedTag {
-		if tag == nil {
-			return nil
-		}
-
-		return &matchedTag{
-			version:     tag.Version,
-			revision:    tag.Revision,
-			flags:       tag.Flags,
-			paddingSize: tag.PaddingSize,
-			frameLength: len(tag.Frames),
-		}
-	}
-
 	tests := []struct {
-		name          string
-		args          args
-		wantTag       *matchedTag
-		wantTotalRead int
-		wantErr       bool
+		name    string
+		fields  fields
+		wantTag *Tag
+		wantErr bool
 	}{
 		{
-			name: "Compact File",
-			args: args{openTestData("./testdata/id3_compact.bin", 0)},
-			wantTag: &matchedTag{
-				version: 3, revision: 0, flags: 0,
-				paddingSize: 0,
-				frameLength: 16,
+			name:   "Empty Tag",
+			fields: fields{r: bytes.NewReader([]byte("ID3\x03\x00\xE0\x00\x00\x00\x00"))},
+			wantTag: &Tag{
+				Version:     3,
+				Revision:    0,
+				Flags:       0b11100000,
+				Frames:      []Frame{},
+				PaddingSize: 0,
 			},
-			wantTotalRead: 330175,
-			wantErr:       false,
+			wantErr: false,
 		},
 		{
-			name: "Compact File",
-			args: args{openTestData("./testdata/id3_compact.bin", 0)},
-			wantTag: &matchedTag{
-				version: 3, revision: 0, flags: 0,
-				paddingSize: 0,
-				frameLength: 16,
-			},
-			wantTotalRead: 330175,
-			wantErr:       false,
+			name:    "Corrupted file",
+			fields:  fields{r: bytes.NewReader([]byte("IE6\x03\x00\xE0\x00\x00\x00\x00"))},
+			wantTag: nil,
+			wantErr: true,
 		},
 		{
-			name: "Padded File",
-			args: args{openTestData("./testdata/id3_padded.bin", 0)},
-			wantTag: &matchedTag{
-				version: 3, revision: 0, flags: 0,
-				paddingSize: 53269,
-				frameLength: 17,
-			},
-			wantTotalRead: 65536,
-			wantErr:       false,
+			name:    "Reached EOF when reading a frame",
+			fields:  fields{r: io.LimitReader(openTestData("./testdata/id3_compact.bin", t), 1024)},
+			wantTag: nil,
+			wantErr: true,
 		},
 		{
-			name:          "Corrupted file",
-			args:          args{openTestData("/dev/random", 0)},
-			wantTag:       nil,
-			wantTotalRead: 10, // tried to read header
-			wantErr:       true,
+			name:    "Reached EOF when reading header",
+			fields:  fields{r: io.LimitReader(openTestData("./testdata/id3_compact.bin", t), 8)},
+			wantTag: nil,
+			wantErr: true,
 		},
 		{
-			name: "Empty ID3 Tag",
-			args: args{testBytes([]byte("ID3\x03\x00\xE0\x00\x00\x00\x00"))},
-			wantTag: &matchedTag{
-				version:     3,
-				revision:    0,
-				flags:       0b11100000,
-				paddingSize: 0,
-				frameLength: 0,
-			},
-			wantTotalRead: 10,
-			wantErr:       false,
-		},
-		{
-			name:          "Invalid leading bits",
-			args:          args{testBytes([]byte("IE6\x03\x00\x00\x7F\x7F\x7F\x7F"))},
-			wantTag:       nil,
-			wantTotalRead: 10,
-			wantErr:       true,
-		},
-		{
-			name:          "Empty file",
-			args:          args{openTestData("/dev/null", 0)},
-			wantTag:       nil,
-			wantTotalRead: 0,
-			wantErr:       true,
-		},
-		{
-			name:          "Reached EOF when reading a frame",
-			args:          args{openTestData("./testdata/id3_compact.bin", 1024)},
-			wantTag:       nil,
-			wantTotalRead: 1024,
-			wantErr:       true,
-		},
-		{
-			name:          "Reached EOF when reading padding section",
-			args:          args{openTestData("./testdata/id3_padded.bin", 60000)},
-			wantTag:       nil,
-			wantTotalRead: 60000,
-			wantErr:       true,
+			name:    "Reached EOF when reading padding section",
+			fields:  fields{r: io.LimitReader(openTestData("./testdata/id3_padded.bin", t), 60000)},
+			wantTag: nil,
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotTag, gotTotalRead, err := Parse(tt.args.opener(t))
+			d := &Decoder{
+				r: tt.fields.r,
+				n: tt.fields.n,
+			}
+
+			if rc, ok := tt.fields.r.(io.ReadCloser); ok {
+				t.Cleanup(func() {
+					rc.Close()
+				})
+			}
+			tag, err := d.Decode()
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
-				return
+				t.Errorf("Decode() error = %v, wantErr %v", err, tt.wantErr)
 			}
-
-			if !reflect.DeepEqual(tagToMatchedTag(gotTag), tt.wantTag) {
-				t.Errorf("Parse() gotTag = %v, want %#v", gotTag, tt.wantTag)
-			}
-
-			if gotTotalRead != tt.wantTotalRead {
-				t.Errorf("Parse() gotTotalRead = %v, want %v", gotTotalRead, tt.wantTotalRead)
+			if !reflect.DeepEqual(tag, tt.wantTag) {
+				t.Errorf("Decode() tag = %v, want %v", tag, tt.wantTag)
 			}
 		})
 	}
 }
 
+func TestDecoder_ActualFile(t *testing.T) {
+	tests := []struct {
+		filePath        string
+		wantTagVersion  uint8
+		wantTagRevision uint8
+		wantTagFlags    uint8
+		wantFrameLength int
+		wantPaddingSize int
+	}{
+		{
+			filePath:        "./testdata/id3_compact.bin",
+			wantTagVersion:  3,
+			wantTagRevision: 0,
+			wantTagFlags:    0,
+			wantFrameLength: 16,
+			wantPaddingSize: 0,
+		},
+		{
+			filePath:        "./testdata/id3_padded.bin",
+			wantTagVersion:  3,
+			wantTagRevision: 0,
+			wantTagFlags:    0,
+			wantFrameLength: 17,
+			wantPaddingSize: 53269,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("file: %s", tt.filePath), func(t *testing.T) {
+			f := openTestData(tt.filePath, t)
+
+			decoder := new(Decoder)
+			decoder.r = f
+
+			tag, err := decoder.Decode()
+
+			if err != nil {
+				t.Errorf("Decode() error = %v", err)
+			}
+
+			if tag.Version != tt.wantTagVersion {
+				t.Errorf("Decode() tag.Version = %v, want %v", tag.Version, tt.wantTagVersion)
+			}
+
+			if tag.Revision != tt.wantTagRevision {
+				t.Errorf("Decode() tag.Revision = %v, want %v", tag.Revision, tt.wantTagRevision)
+			}
+
+			if tag.Flags != tt.wantTagFlags {
+				t.Errorf("Decode() tag.Flags = %08b, want %08b", tag.Flags, tt.wantTagFlags)
+			}
+
+			if len(tag.Frames) != tt.wantFrameLength {
+				t.Errorf("Decode() len(tag.Frames) = %v, want %v", len(tag.Frames), tt.wantFrameLength)
+			}
+
+			if tag.PaddingSize != tt.wantPaddingSize {
+				t.Errorf("Decode() tag.PaddingSize = %v, want %v", tag.PaddingSize, tt.wantPaddingSize)
+			}
+		})
+	}
+}
+
+func TestDecoder_readFrame(t *testing.T) {
+	sampleTextFrame := generateTextFrame("TIT2", "Foo Bar", 0x0)
+
+	type fields struct {
+		r io.Reader
+		n int
+	}
+	tests := []struct {
+		name      string
+		fields    fields
+		wantFrame *Frame
+		wantErr   bool
+	}{
+		{
+			name:   "Text Frame",
+			fields: fields{r: bytes.NewReader(sampleTextFrame)},
+			wantFrame: &Frame{
+				ID:    "TIT2",
+				Flags: 0,
+				Data:  []byte("\x00Foo Bar\x00"),
+			},
+			wantErr: false,
+		},
+		{
+			name:   "Text Frame with non-Latin1 chars",
+			fields: fields{r: bytes.NewReader(generateTextFrame("TIT2", "世界你好", 0x00))},
+			wantFrame: &Frame{
+				ID:    "TIT2",
+				Flags: 0,
+				Data:  []byte("\x01\xFE\xFF\x4E\x16\x75\x4C\x4F\x60\x59\x7D\x00\x00"),
+			},
+			wantErr: false,
+		},
+		{
+			name:   "Data Frame",
+			fields: fields{r: bytes.NewReader(generateDataFrame("PRIV", []byte{0xDE, 0xAD, 0xBE, 0xEF}, 0x00))},
+			wantFrame: &Frame{
+				ID:    "PRIV",
+				Flags: 0,
+				Data:  []byte("\xDE\xAD\xBE\xEF"),
+			},
+			wantErr: false,
+		},
+		{
+			name:      "Padding",
+			fields:    fields{r: bytes.NewReader(make([]byte, 20))},
+			wantFrame: nil,
+			wantErr:   false,
+		},
+		{
+			name:      "Error: Failed to read header",
+			fields:    fields{r: io.LimitReader(bytes.NewReader(sampleTextFrame), 5)},
+			wantFrame: nil,
+			wantErr:   true,
+		},
+		{
+			name:      "Error: Failed to read frame data",
+			fields:    fields{r: io.LimitReader(bytes.NewReader(sampleTextFrame), 11)},
+			wantFrame: nil,
+			wantErr:   true,
+		},
+		{
+			name:      "Error: Invalid frame ID",
+			fields:    fields{r: bytes.NewReader(generateDataFrame(string([]byte{0xde, 0xad, 0xbe, 0xef}), []byte{}, 0x00))},
+			wantFrame: nil,
+			wantErr:   true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &Decoder{
+				r: tt.fields.r,
+				n: tt.fields.n,
+			}
+
+			frame, err := d.readFrame()
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("readFrame() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !reflect.DeepEqual(frame, tt.wantFrame) {
+				t.Errorf("readFrame() frame = %v, want %v", frame, tt.wantFrame)
+			}
+		})
+	}
+}
 func Test_decodeTagSize(t *testing.T) {
 	type args struct {
 		data []byte

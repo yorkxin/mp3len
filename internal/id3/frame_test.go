@@ -1,8 +1,6 @@
 package id3
 
 import (
-	"bytes"
-	"io"
 	"reflect"
 	"testing"
 )
@@ -35,97 +33,6 @@ func generateTextFrame(id string, str string, flags uint16) []byte {
 	}
 
 	return b
-}
-
-func Test_readNextFrame(t *testing.T) {
-	sampleTextFrame := generateTextFrame("TIT2", "Foo Bar", 0x0)
-	type args struct {
-		r io.Reader
-	}
-	tests := []struct {
-		name          string
-		args          args
-		wantFrame     *Frame
-		wantTotalRead int
-		wantErr       bool
-	}{
-		{
-			name: "Text Frame",
-			args: args{bytes.NewReader(sampleTextFrame)},
-			wantFrame: &Frame{
-				ID:    "TIT2",
-				Flags: 0,
-				Data:  []byte("\x00Foo Bar\x00"),
-			},
-			wantTotalRead: 19,
-			wantErr:       false,
-		},
-		{
-			name: "Text Frame with non-Latin1 chars",
-			args: args{bytes.NewReader(generateTextFrame("TIT2", "世界你好", 0x00))},
-			wantFrame: &Frame{
-				ID:    "TIT2",
-				Flags: 0,
-				Data:  []byte("\x01\xFE\xFF\x4E\x16\x75\x4C\x4F\x60\x59\x7D\x00\x00"),
-			},
-			wantTotalRead: 23,
-			wantErr:       false,
-		},
-		{
-			name: "Data Frame",
-			args: args{bytes.NewReader(generateDataFrame("PRIV", []byte{0xDE, 0xAD, 0xBE, 0xEF}, 0x00))},
-			wantFrame: &Frame{
-				ID:    "PRIV",
-				Flags: 0,
-				Data:  []byte("\xDE\xAD\xBE\xEF"),
-			},
-			wantTotalRead: 14,
-			wantErr:       false,
-		},
-		{
-			name:          "Padding",
-			args:          args{bytes.NewReader(make([]byte, 20))},
-			wantFrame:     nil,
-			wantTotalRead: 10, // it reads 10 bytes of header, found all 0, then abort.
-			wantErr:       false,
-		},
-		{
-			name:          "Error: Failed to read header",
-			args:          args{io.LimitReader(bytes.NewReader(sampleTextFrame), 5)},
-			wantFrame:     nil,
-			wantTotalRead: 5,
-			wantErr:       true,
-		},
-		{
-			name:          "Error: Failed to read frame data",
-			args:          args{io.LimitReader(bytes.NewReader(sampleTextFrame), 11)},
-			wantFrame:     nil,
-			wantTotalRead: 11,
-			wantErr:       true,
-		},
-		{
-			name:          "Error: Invalid frame ID",
-			args:          args{bytes.NewReader(generateDataFrame(string([]byte{0xde, 0xad, 0xbe, 0xef}), []byte{}, 0x00))},
-			wantFrame:     nil,
-			wantTotalRead: 10,
-			wantErr:       true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotFrame, gotTotalRead, err := readNextFrame(tt.args.r)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("readNextFrame() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(gotFrame, tt.wantFrame) {
-				t.Errorf("readNextFrame() gotFrame = %v, want %v", gotFrame, tt.wantFrame)
-			}
-			if gotTotalRead != tt.wantTotalRead {
-				t.Errorf("readNextFrame() gotTotalRead = %v, want %v", gotTotalRead, tt.wantTotalRead)
-			}
-		})
-	}
 }
 
 func TestFrame_Text(t *testing.T) {

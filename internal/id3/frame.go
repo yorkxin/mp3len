@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"unicode/utf16"
 )
 
@@ -197,69 +196,4 @@ func isLatin1Compatible(str string) bool {
 	}
 
 	return true
-}
-
-// readNextFrame reads an ID3 frame from the reader.
-//
-// Returns a pointer to Frame and total bytes read (int) if successful.
-//
-// Returns nil *Frame and nil error when all data are 0x00 (padding). The caller
-// should discard all the remaining data up to end of ID3 tag.
-func readNextFrame(r io.Reader) (*Frame, int, error) {
-	totalRead := 0
-	header := [10]byte{}
-	n, err := io.ReadFull(r, header[:])
-	totalRead += n
-	if err != nil {
-		return nil, totalRead, err
-	}
-
-	allZero := [10]byte{}
-	if bytes.Compare(header[:], allZero[:]) == 0 {
-		// Reached padding. Exit.
-		return nil, totalRead, nil
-	}
-
-	// Frame ID       $xx xx xx xx (four characters)
-	// Size           $xx xx xx xx
-	// Flags          $xx xx
-
-	// verify if the id is a valid string
-	idRaw := header[0:4]
-	for _, c := range idRaw {
-		if !(('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')) {
-			err = fmt.Errorf("invalid header: %v", idRaw)
-			return nil, totalRead, err
-		}
-	}
-
-	id := string(idRaw)
-
-	// It's safe to represent size as a 32-bit signed int, even if the spec says
-	// it uses 32-bit integer without specifying it's signed or unsigned,
-	// because the Size section of tag header can only store an 28-bit signed
-	// integer.
-	//
-	// See decodeTagSize for details.
-	//
-	// FIXME: find a way to read signed int directly, without explicit type conversion
-	size := int(binary.BigEndian.Uint32(header[4:8]))
-	flags := binary.BigEndian.Uint16(header[8:10])
-	data := make([]byte, size)
-	// In case of HTTP response body, r is a bufio.Reader, and in some cases
-	// r.Read() may not fill the whole len(data). Using io.ReadFull ensures it
-	// fills the whole len(data) slice.
-	n, err = io.ReadFull(r, data)
-
-	totalRead += n
-
-	if err != nil {
-		return nil, totalRead, err
-	}
-
-	return &Frame{
-		ID:    id,
-		Flags: flags,
-		Data:  data,
-	}, totalRead, nil
 }

@@ -2,6 +2,7 @@ package id3
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -22,52 +23,52 @@ type Tag struct {
 	PaddingSize int
 }
 
-// Parse reads the whole ID3 tag from input r.
-//
-// Returns parsed Tag and totalRead bytes if successful.
-//
-func Parse(r io.Reader) (*Tag, int, error) {
-	/*
-		https://id3.org/id3v2.3.0
-		ID3v2/file identifier   "ID3"
-		ID3v2 version           $03 00
-		ID3v2 flags             %abc00000
-		ID3v2 size              4 * %0xxxxxxx
-	*/
-	totalRead := 0
+type Decoder struct {
+	r io.Reader
+	n int // n bytes that has already been read
 
-	headerBytes := make([]byte, 10)
-	n, err := io.ReadFull(r, headerBytes)
-	totalRead += n
+	tag *Tag
+}
+
+func NewDecoder(r io.Reader) *Decoder {
+	return &Decoder{r: r}
+}
+
+func (d *Decoder) Decode() (*Tag, error) {
+	header := make([]byte, 10)
+	n, err := io.ReadFull(d.r, header)
+	d.n += n
 
 	if err != nil {
-		return nil, totalRead, err
+		return nil, err
 	}
 
-	if bytes.Compare(headerBytes[0:3], id3v2Flag) != 0 {
-		return nil, totalRead, errors.New("invalid ID3 header")
+	if bytes.Compare(header[0:3], id3v2Flag) != 0 {
+		return nil, errors.New("invalid ID3 header")
 	}
 
-	version := headerBytes[3]
-	revision := headerBytes[4]
-	flags := headerBytes[5]
-	size := decodeTagSize(headerBytes[6:]) // 6, 7, 8, 9
+	d.tag = new(Tag)
+	d.tag.Version = header[3]
+	d.tag.Revision = header[4]
+	d.tag.Flags = header[5]
 
-	frames := make([]Frame, 0)
+	size := decodeTagSize(header[6:]) // 6, 7, 8, 9
+
+	d.tag.Frames = make([]Frame, 0)
 
 	// Avoid read exceeding ID3 Tag boundary
-	lr := io.LimitReader(r, int64(size))
+	lr := io.LimitReader(d.r, int64(size))
 
 	// offset from header
-	offset := 0
-	for offset < size {
-		frame, n, readErr := readNextFrame(lr)
-		totalRead += n
+	for {
+		frame, err := d.readFrame()
 
-		if readErr != nil {
-			// Aborts reading further ID3 frames.
-			err = fmt.Errorf("read frame failed at %04X, err: %s", offset+lenOfHeader, readErr)
-			return nil, totalRead, err
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("read frame failed at %04X, err: %s", d.n, err)
 		}
 
 		if frame == nil {
@@ -75,27 +76,85 @@ func Parse(r io.Reader) (*Tag, int, error) {
 			break
 		}
 
-		frames = append(frames, *frame)
-		offset += n
+		d.tag.Frames = append(d.tag.Frames, *frame)
 	}
 
-	paddingSize := size + lenOfHeader - totalRead
+	d.tag.PaddingSize = size + lenOfHeader - d.n
 
 	// discard padding bytes
-	nDiscarded, err := io.CopyN(ioutil.Discard, lr, int64(paddingSize))
-	totalRead += int(nDiscarded)
+	nDiscarded, err := io.CopyN(ioutil.Discard, lr, int64(d.tag.PaddingSize))
+	d.n += int(nDiscarded)
 
 	if err != nil {
-		return nil, totalRead, err
+		return nil, err
 	}
 
-	return &Tag{
-		Version:     version,
-		Revision:    revision,
-		Flags:       flags,
-		Frames:      frames,
-		PaddingSize: paddingSize,
-	}, totalRead, nil
+	return d.tag, nil
+}
+
+// readFrame reads an ID3 frame from the reader.
+//
+// Returns a pointer to Frame and total bytes read (int) if successful.
+//
+// Returns nil *Frame and nil error when all data are 0x00 (padding). The caller
+// should discard all the remaining data up to end of ID3 tag.
+func (d *Decoder) readFrame() (*Frame, error) {
+	header := [10]byte{}
+	n, err := io.ReadFull(d.r, header[:])
+	d.n += n
+	if err != nil {
+		return nil, err
+	}
+
+	allZero := [10]byte{}
+
+	if bytes.Compare(header[:], allZero[:]) == 0 {
+		// Reached padding. Exit.
+		return nil, nil
+	}
+
+	// Frame ID       $xx xx xx xx (four characters)
+	// Size           $xx xx xx xx
+	// Flags          $xx xx
+
+	// verify if the id is a valid string
+	idRaw := header[0:4]
+	for _, c := range idRaw {
+		if !(('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')) {
+			return nil, fmt.Errorf("invalid header: %v", idRaw)
+		}
+	}
+
+	id := string(idRaw)
+
+	// It's safe to represent size as a 32-bit signed int, even if the spec says
+	// it uses 32-bit integer without specifying it's signed or unsigned,
+	// because the Size section of tag header can only store an 28-bit signed
+	// integer.
+	//
+	// See decodeTagSize for details.
+	//
+	// FIXME: find a way to read signed int directly, without explicit type conversion
+	size := int(binary.BigEndian.Uint32(header[4:8]))
+	flags := binary.BigEndian.Uint16(header[8:10])
+	data := make([]byte, size)
+	// In case of HTTP response body, r is a bufio.Reader, and in some cases
+	// r.Read() may not fill the whole len(data). Using io.ReadFull ensures it
+	// fills the whole len(data) slice.
+	n, err = io.ReadFull(d.r, data)
+
+	d.n += n
+
+	if err != nil {
+		return nil, err
+	}
+
+	frame := new(Frame)
+	frame.ID = id
+	frame.Flags = flags
+	frame.Data = data
+
+	return frame, nil
 }
 
 // decodeTagSize returns an integer from 4-byte (32-bit) input.
