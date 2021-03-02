@@ -12,7 +12,8 @@ import (
 var id3v2Flag = []byte("ID3") // first 3 bytes of an MP3 file with ID3v2 tag
 const lenOfHeader = 10        // fixed length defined by ID3v2 spec
 
-// Tag is the whole ID3 Tag block, including a Header and many FrameWithOffset.
+// Tag is the whole ID3 Tag block, including a Header, many Frame elements,
+// and PaddingSize.
 type Tag struct {
 	// Header part
 	Version  uint8
@@ -23,6 +24,7 @@ type Tag struct {
 	PaddingSize int
 }
 
+// Decoder holds ID3 decoding state internally.
 type Decoder struct {
 	r    io.Reader
 	n    int // n bytes that has already been read
@@ -31,10 +33,12 @@ type Decoder struct {
 	tag *Tag
 }
 
+// NewDecoder returns an ID3 decoder for reader r.
 func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{r: r}
 }
 
+// Decode decodes ID3 tag from reader. Returns error when failed.
 func (d *Decoder) Decode() (*Tag, error) {
 	header := make([]byte, 10)
 	n, err := io.ReadFull(d.r, header)
