@@ -289,3 +289,69 @@ func Test_encodeTagSize(t *testing.T) {
 		})
 	}
 }
+
+type emptyReader struct {
+	eof bool
+}
+
+func (r emptyReader) Read(_ []byte) (int, error) {
+	if r.eof {
+		return 0, io.EOF
+	}
+
+	r.eof = true
+	return 1, nil
+}
+
+func TestNewDecoder(t *testing.T) {
+	anEmptyReader := emptyReader{}
+
+	type args struct {
+		r io.Reader
+	}
+	tests := []struct {
+		name string
+		args args
+		want *Decoder
+	}{
+		{name: "OK", args: args{r: anEmptyReader}, want: &Decoder{r: anEmptyReader, n: 0, size: 0, tag: nil}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NewDecoder(tt.args.r); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewDecoder() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDecoder_InputOffset(t *testing.T) {
+	anEmptyReader := emptyReader{}
+
+	type fields struct {
+		r    io.Reader
+		n    int
+		size int
+		tag  *Tag
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   int
+	}{
+		{name: "Returns current r.n", fields: fields{r: anEmptyReader, n: 999, size: 100, tag: nil}, want: 999},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &Decoder{
+				r:    tt.fields.r,
+				n:    tt.fields.n,
+				size: tt.fields.size,
+				tag:  tt.fields.tag,
+			}
+			if got := d.InputOffset(); got != tt.want {
+				t.Errorf("Decoder.InputOffset() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

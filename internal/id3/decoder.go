@@ -24,8 +24,9 @@ type Tag struct {
 }
 
 type Decoder struct {
-	r io.Reader
-	n int // n bytes that has already been read
+	r    io.Reader
+	n    int // n bytes that has already been read
+	size int // total size of the tag payload, excluding header
 
 	tag *Tag
 }
@@ -52,12 +53,12 @@ func (d *Decoder) Decode() (*Tag, error) {
 	d.tag.Revision = header[4]
 	d.tag.Flags = header[5]
 
-	size := decodeTagSize(header[6:]) // 6, 7, 8, 9
+	d.size = decodeTagSize(header[6:]) // 6, 7, 8, 9
 
 	d.tag.Frames = make([]Frame, 0)
 
 	// Avoid read exceeding ID3 Tag boundary
-	lr := io.LimitReader(d.r, int64(size))
+	d.r = io.LimitReader(d.r, int64(d.size))
 
 	// offset from header
 	for {
@@ -79,10 +80,10 @@ func (d *Decoder) Decode() (*Tag, error) {
 		d.tag.Frames = append(d.tag.Frames, *frame)
 	}
 
-	d.tag.PaddingSize = size + lenOfHeader - d.n
+	d.tag.PaddingSize = d.size + lenOfHeader - d.n
 
 	// discard padding bytes
-	nDiscarded, err := io.CopyN(ioutil.Discard, lr, int64(d.tag.PaddingSize))
+	nDiscarded, err := io.CopyN(ioutil.Discard, d.r, int64(d.tag.PaddingSize))
 	d.n += int(nDiscarded)
 
 	if err != nil {
@@ -155,6 +156,11 @@ func (d *Decoder) readFrame() (*Frame, error) {
 	frame.Data = data
 
 	return frame, nil
+}
+
+// InputOffset returns how many bytes that the decoder has read so far.
+func (d *Decoder) InputOffset() int {
+	return d.n
 }
 
 // decodeTagSize returns an integer from 4-byte (32-bit) input.
