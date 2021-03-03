@@ -48,7 +48,7 @@ func (d *Decoder) Decode() (*Tag, error) {
 		return nil, err
 	}
 
-	if bytes.Compare(header[0:3], id3v2Flag) != 0 {
+	if !bytes.Equal(header[0:3], id3v2Flag) {
 		return nil, errors.New("invalid ID3 header")
 	}
 
@@ -113,7 +113,7 @@ func (d *Decoder) readFrame() (*Frame, error) {
 
 	allZero := [10]byte{}
 
-	if bytes.Compare(header[:], allZero[:]) == 0 {
+	if bytes.Equal(header[:], allZero[:]) {
 		// Reached padding. Exit.
 		return nil, nil
 	}

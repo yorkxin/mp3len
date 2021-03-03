@@ -11,8 +11,6 @@ import (
 const textEncodingLatin1 = 0x00
 const textEncodingUTF16 = 0x01
 
-const headerLength = 10
-
 // Frame holds data structure for an ID3v2 frame.
 type Frame struct {
 	ID    string // 4-char

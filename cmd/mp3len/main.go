@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"io"
@@ -70,7 +69,6 @@ func processInput(location *url.URL) (*mp3len.Metadata, error) {
 }
 
 func main() {
-	pause := flag.Bool("pause", false, "press any key to exit; useful for checking IO activity.")
 	verbose := flag.Bool("verbose", false, "show verbose info such as id3 tags and mp3 format")
 
 	flag.Parse()
@@ -90,11 +88,4 @@ func main() {
 	}
 
 	fmt.Println(info.String(*verbose))
-
-	if *pause == true {
-		anyKeyReader := bufio.NewReader(os.Stdin)
-		fmt.Printf("Press enter key to exit...")
-		buf := make([]byte, 1)
-		anyKeyReader.Read(buf)
-	}
 }

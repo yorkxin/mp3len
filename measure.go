@@ -28,7 +28,7 @@ func (metadata *Metadata) calculateDuration(totalSize int64) {
 }
 
 func (metadata *Metadata) String(verbose bool) string {
-	if verbose == false {
+	if !verbose {
 		return metadata.duration.String()
 	}
 
