@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yorkxin/mp3len/internal/id3"
-	"github.com/yorkxin/mp3len/internal/mp3header"
+	"mp3len/internal/id3"
+	"mp3len/internal/mp3header"
 )
 
 // Metadata holds the parsed metadata of an MP3 input

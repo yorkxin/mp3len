@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/yorkxin/mp3len"
+	"mp3len"
 )
 
 var errInvalidInput = fmt.Errorf("first argument must be a path or HTTP URL")

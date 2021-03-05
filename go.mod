@@ -1,3 +1,3 @@
-module github.com/yorkxin/mp3len
+module mp3len
 
-go 1.15
+go 1.16
