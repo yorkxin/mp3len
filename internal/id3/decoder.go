@@ -12,6 +12,13 @@ import (
 var id3v2Flag = []byte("ID3") // first 3 bytes of an MP3 file with ID3v2 tag
 const lenOfHeader = 10        // fixed length defined by ID3v2 spec
 
+type tagHeader struct {
+	version  uint8
+	revision uint8
+	flags    uint8
+	size     int // total size of the tag payload, excluding header
+}
+
 // Tag is the whole ID3 Tag block, including a Header, many Frame elements,
 // and PaddingSize.
 type Tag struct {
@@ -26,9 +33,8 @@ type Tag struct {
 
 // Decoder holds ID3 decoding state internally.
 type Decoder struct {
-	r    io.Reader
-	n    int // n bytes that has already been read
-	size int // total size of the tag payload, excluding header
+	r io.Reader
+	n int // n bytes that has already been read
 
 	tag *Tag
 }
@@ -38,31 +44,45 @@ func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{r: r}
 }
 
+func readTagHeader(r io.Reader, h *tagHeader) (int, error) {
+	header := make([]byte, 10)
+	n, err := io.ReadFull(r, header)
+
+	if err != nil {
+		return n, err
+	}
+
+	if !bytes.Equal(header[0:3], id3v2Flag) {
+		return n, errors.New("invalid ID3 header")
+	}
+
+	h.version = header[3]
+	h.revision = header[4]
+	h.flags = header[5]
+	h.size = decodeTagSize(header[6:10])
+	return n, nil
+}
+
 // Decode decodes ID3 tag from reader. Returns error when failed.
 func (d *Decoder) Decode() (*Tag, error) {
-	header := make([]byte, 10)
-	n, err := io.ReadFull(d.r, header)
+	header := new(tagHeader)
+	n, err := readTagHeader(d.r, header)
 	d.n += n
 
 	if err != nil {
 		return nil, err
 	}
 
-	if !bytes.Equal(header[0:3], id3v2Flag) {
-		return nil, errors.New("invalid ID3 header")
+	d.tag = &Tag{
+		Version:  header.version,
+		Revision: header.revision,
+		Flags:    header.flags,
 	}
-
-	d.tag = new(Tag)
-	d.tag.Version = header[3]
-	d.tag.Revision = header[4]
-	d.tag.Flags = header[5]
-
-	d.size = decodeTagSize(header[6:]) // 6, 7, 8, 9
 
 	d.tag.Frames = make([]Frame, 0)
 
 	// Avoid read exceeding ID3 Tag boundary
-	d.r = io.LimitReader(d.r, int64(d.size))
+	d.r = io.LimitReader(d.r, int64(header.size))
 
 	// offset from header
 	for {
@@ -84,7 +104,7 @@ func (d *Decoder) Decode() (*Tag, error) {
 		d.tag.Frames = append(d.tag.Frames, *frame)
 	}
 
-	d.tag.PaddingSize = d.size + lenOfHeader - d.n
+	d.tag.PaddingSize = header.size + lenOfHeader - d.n
 
 	// discard padding bytes
 	nDiscarded, err := io.CopyN(ioutil.Discard, d.r, int64(d.tag.PaddingSize))

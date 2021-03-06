@@ -314,7 +314,7 @@ func TestNewDecoder(t *testing.T) {
 		args args
 		want *Decoder
 	}{
-		{name: "OK", args: args{r: anEmptyReader}, want: &Decoder{r: anEmptyReader, n: 0, size: 0, tag: nil}},
+		{name: "OK", args: args{r: anEmptyReader}, want: &Decoder{r: anEmptyReader, n: 0, tag: nil}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -329,25 +329,23 @@ func TestDecoder_InputOffset(t *testing.T) {
 	anEmptyReader := emptyReader{}
 
 	type fields struct {
-		r    io.Reader
-		n    int
-		size int
-		tag  *Tag
+		r   io.Reader
+		n   int
+		tag *Tag
 	}
 	tests := []struct {
 		name   string
 		fields fields
 		want   int
 	}{
-		{name: "Returns current r.n", fields: fields{r: anEmptyReader, n: 999, size: 100, tag: nil}, want: 999},
+		{name: "Returns current r.n", fields: fields{r: anEmptyReader, n: 999, tag: nil}, want: 999},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d := &Decoder{
-				r:    tt.fields.r,
-				n:    tt.fields.n,
-				size: tt.fields.size,
-				tag:  tt.fields.tag,
+				r:   tt.fields.r,
+				n:   tt.fields.n,
+				tag: tt.fields.tag,
 			}
 			if got := d.InputOffset(); got != tt.want {
 				t.Errorf("Decoder.InputOffset() = %v, want %v", got, tt.want)
